@@ -1,0 +1,19 @@
+# env files
+.env
+*.env
+
+# Flutter
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+
+# Go
+backend/bin/
+backend/*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store

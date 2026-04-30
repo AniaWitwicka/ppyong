@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'theme/app_theme.dart';
 
 const _backendUrl = 'http://localhost:8080';
 
@@ -13,9 +14,10 @@ class PpyongApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       title: '뿅',
-      home: PingScreen(),
+      theme: AppTheme.light,
+      home: const PingScreen(),
     );
   }
 }

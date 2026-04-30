@@ -242,6 +242,15 @@ class _ActionButtons extends StatelessWidget {
   final Color accentColor;
   final String deckTitle;
 
+  void _showPreview(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PreviewSheet(deckTitle: deckTitle),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -265,7 +274,7 @@ class _ActionButtons extends StatelessWidget {
             label: 'Preview cards',
             color: accentColor.withOpacity(0.15),
             textColor: accentColor,
-            onTap: () {},
+            onTap: () => _showPreview(context),
           ),
         ),
       ],
@@ -338,6 +347,97 @@ class _ExpandToggle extends StatelessWidget {
               expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
               color: AppColors.ash,
               size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewSheet extends StatelessWidget {
+  const _PreviewSheet({required this.deckTitle});
+  final String deckTitle;
+
+  static const _cards = [
+    (korean: '안녕하세요', romanisation: 'annyeonghaseyo', translation: 'Hello'),
+    (korean: '감사합니다', romanisation: 'gamsahamnida', translation: 'Thank you'),
+    (korean: '괜찮아요', romanisation: 'gwaenchanayo', translation: "It's okay"),
+    (korean: '죄송합니다', romanisation: 'joesonghamnida', translation: "I'm sorry"),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      maxChildSize: 0.92,
+      minChildSize: 0.4,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.offWhite,
+          borderRadius: BorderRadius.vertical(top: AppRadius.card),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: const BoxDecoration(
+                color: AppColors.fog,
+                borderRadius: AppRadius.pill,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(deckTitle,
+                        style: Theme.of(context).textTheme.headlineMedium),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppColors.ash),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: AppColors.border, height: 1),
+            Expanded(
+              child: ListView.separated(
+                controller: controller,
+                itemCount: _cards.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(color: AppColors.border, height: 1),
+                itemBuilder: (context, i) {
+                  final c = _cards[i];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(c.korean,
+                                  style: Theme.of(context).textTheme.titleMedium),
+                              Text(c.romanisation,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(color: AppColors.ash)),
+                            ],
+                          ),
+                        ),
+                        Text(c.translation,
+                            style: Theme.of(context).textTheme.bodyLarge),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),

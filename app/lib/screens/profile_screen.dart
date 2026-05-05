@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../models/user.dart';
+import '../services/user_service.dart';
+import '../widgets/app_toast.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -9,10 +12,102 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _notificationsOn = true;
+  UserProfile? _profile;
+  UserStats? _stats;
+  UserSettings? _settings;
+  bool _loading = true;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _hasError = false; });
+    try {
+      final results = await Future.wait([
+        UserService.instance.getMe(),
+        UserService.instance.getMyStats(),
+        UserService.instance.getMySettings(),
+      ]);
+      setState(() {
+        _profile = results[0] as UserProfile;
+        _stats   = results[1] as UserStats;
+        _settings = results[2] as UserSettings;
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() { _loading = false; _hasError = true; });
+      if (mounted) {
+        showAppToast(context,
+            variant: ToastVariant.error,
+            title: 'Failed to load profile',
+            subtitle: 'Check your connection and try again');
+      }
+    }
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    // Optimistic update
+    setState(() => _settings = _settings?.copyWith(notificationsEnabled: value));
+    try {
+      final updated = await UserService.instance.updateSettings(notificationsEnabled: value);
+      setState(() => _settings = updated);
+    } catch (_) {
+      // Revert
+      setState(() => _settings = _settings?.copyWith(notificationsEnabled: !value));
+      if (mounted) {
+        showAppToast(context,
+            variant: ToastVariant.error,
+            title: 'Could not save setting',
+            subtitle: 'Try again in a moment');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.offWhite,
+        body: Center(child: CircularProgressIndicator(color: AppColors.periwinkle)),
+      );
+    }
+
+    if (_hasError || _profile == null) {
+      return Scaffold(
+        backgroundColor: AppColors.offWhite,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('😕', style: TextStyle(fontSize: 48)),
+              const SizedBox(height: 16),
+              const Text('Could not load profile',
+                  style: TextStyle(color: AppColors.ash, fontSize: 16)),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: _load,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: const BoxDecoration(
+                      color: AppColors.periwinkle, borderRadius: AppRadius.pill),
+                  child: const Text('Try again',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final profile = _profile!;
+    final stats = _stats!;
+    final settings = _settings!;
+
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       body: SafeArea(
@@ -20,11 +115,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              const _ProfileHeader(
-                name: 'Ania',
-                email: 'witwicka.ania@gmail.com',
-                role: 'Learner',
-                initials: 'AW',
+              _ProfileHeader(
+                name: profile.name,
+                email: profile.email,
+                role: profile.displayRole,
+                initials: profile.initials,
               ),
               const SizedBox(height: 16),
               Padding(
@@ -32,19 +127,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _StreakBanner(streak: 7, best: 14),
+                    _StreakBanner(
+                      streak: profile.streak,
+                      best: profile.bestStreak,
+                      weeklyActivity: stats.weeklyActivity,
+                    ),
                     const SizedBox(height: 16),
-                    const _StatsGrid(
-                      mastered: 34,
-                      learning: 12,
-                      sessions: 21,
-                      accuracy: 78,
+                    _StatsGrid(
+                      mastered: stats.masteredCount,
+                      learning: stats.learningCount,
+                      sessions: stats.sessionCount,
+                      accuracy: stats.accuracyPercent,
                     ),
                     const SizedBox(height: 24),
                     _SettingsSection(
-                      notificationsOn: _notificationsOn,
-                      onNotificationsToggle: (v) =>
-                          setState(() => _notificationsOn = v),
+                      notificationsOn: settings.notificationsEnabled,
+                      reminderTime: settings.displayReminderTime,
+                      onNotificationsToggle: _toggleNotifications,
                     ),
                     const SizedBox(height: 16),
                     const _AccountSection(),
@@ -102,36 +201,27 @@ class _ProfileHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            name,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
+          Text(name,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
-          Text(
-            email,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF7A5500),
-                  fontSize: 13,
-                ),
-          ),
+          Text(email,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: const Color(0xFF7A5500), fontSize: 13)),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: const BoxDecoration(
-              color: AppColors.ink,
-              borderRadius: AppRadius.pill,
-            ),
-            child: Text(
-              role,
-              style: const TextStyle(
-                color: AppColors.sunnyYellow,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+                color: AppColors.ink, borderRadius: AppRadius.pill),
+            child: Text(role,
+                style: const TextStyle(
+                    color: AppColors.sunnyYellow,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -142,50 +232,47 @@ class _ProfileHeader extends StatelessWidget {
 // ── Streak banner ─────────────────────────────────────────────────────────
 
 class _StreakBanner extends StatelessWidget {
-  const _StreakBanner({required this.streak, required this.best});
+  const _StreakBanner({
+    required this.streak,
+    required this.best,
+    required this.weeklyActivity,
+  });
 
   final int streak;
   final int best;
+  final List<bool> weeklyActivity;
 
   static const _days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  // mock: last 7 days studied status (true = studied)
-  static const _studied = [true, true, true, true, false, true, true];
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
-        color: AppColors.orange,
-        borderRadius: AppRadius.cardBorderRadius,
-      ),
+          color: AppColors.orange, borderRadius: AppRadius.cardBorderRadius),
       child: Row(
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Current streak',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(0.85),
-                      ),
-                ),
+                Text('Current streak',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: Colors.white.withOpacity(0.85))),
                 const SizedBox(height: 4),
-                Text(
-                  '$streak days 🔥',
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                        color: Colors.white,
-                        fontSize: 32,
-                      ),
-                ),
+                Text('$streak days 🔥',
+                    style: Theme.of(context)
+                        .textTheme
+                        .displayLarge
+                        ?.copyWith(color: Colors.white, fontSize: 32)),
                 const SizedBox(height: 4),
-                Text(
-                  'Best: $best days',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(0.7),
-                      ),
-                ),
+                Text('Best: $best days',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: Colors.white.withOpacity(0.7))),
               ],
             ),
           ),
@@ -194,7 +281,7 @@ class _StreakBanner extends StatelessWidget {
             children: [
               Row(
                 children: List.generate(7, (i) {
-                  final done = _studied[i];
+                  final done = i < weeklyActivity.length && weeklyActivity[i];
                   return Padding(
                     padding: const EdgeInsets.only(left: 4),
                     child: Container(
@@ -202,9 +289,7 @@ class _StreakBanner extends StatelessWidget {
                       height: 22,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: done
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.3),
+                        color: done ? Colors.white : Colors.white.withOpacity(0.3),
                       ),
                     ),
                   );
@@ -212,23 +297,18 @@ class _StreakBanner extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Row(
-                children: List.generate(7, (i) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: SizedBox(
-                      width: 22,
-                      child: Text(
-                        _days[i],
+                children: List.generate(7, (i) => Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: SizedBox(
+                    width: 22,
+                    child: Text(_days[i],
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                )),
               ),
             ],
           ),
@@ -263,34 +343,14 @@ class _StatsGrid extends StatelessWidget {
       mainAxisSpacing: 12,
       childAspectRatio: 1.6,
       children: [
-        _StatTile(
-          label: 'Mastered',
-          value: '$mastered',
-          unit: 'cards',
-          bg: const Color(0xFFE8F5EE),
-          valueColor: AppColors.forestGreen,
-        ),
-        _StatTile(
-          label: 'Learning',
-          value: '$learning',
-          unit: 'cards',
-          bg: const Color(0xFFEEF3FE),
-          valueColor: AppColors.periwinkle,
-        ),
-        _StatTile(
-          label: 'Sessions',
-          value: '$sessions',
-          unit: 'total',
-          bg: const Color(0xFFFEF9E8),
-          valueColor: const Color(0xFF7A5500),
-        ),
-        _StatTile(
-          label: 'Accuracy',
-          value: '$accuracy%',
-          unit: 'avg',
-          bg: const Color(0xFFFEF0F6),
-          valueColor: AppColors.bubblegum,
-        ),
+        _StatTile(label: 'Mastered', value: '$mastered', unit: 'cards',
+            bg: const Color(0xFFE8F5EE), valueColor: AppColors.forestGreen),
+        _StatTile(label: 'Learning', value: '$learning', unit: 'cards',
+            bg: const Color(0xFFEEF3FE), valueColor: AppColors.periwinkle),
+        _StatTile(label: 'Sessions', value: '$sessions', unit: 'total',
+            bg: const Color(0xFFFEF9E8), valueColor: const Color(0xFF7A5500)),
+        _StatTile(label: 'Accuracy', value: '$accuracy%', unit: 'avg',
+            bg: const Color(0xFFFEF0F6), valueColor: AppColors.bubblegum),
       ],
     );
   }
@@ -320,34 +380,28 @@ class _StatTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.ash,
-                  fontSize: 12,
-                ),
-          ),
+          Text(label,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.ash, fontSize: 12)),
           const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                value,
-                style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                      color: valueColor,
-                      fontSize: 26,
-                    ),
-              ),
+              Text(value,
+                  style: Theme.of(context)
+                      .textTheme
+                      .displayMedium
+                      ?.copyWith(color: valueColor, fontSize: 26)),
               const SizedBox(width: 4),
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
-                child: Text(
-                  unit,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: valueColor.withOpacity(0.7),
-                        fontSize: 12,
-                      ),
-                ),
+                child: Text(unit,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: valueColor.withOpacity(0.7), fontSize: 12)),
               ),
             ],
           ),
@@ -362,10 +416,12 @@ class _StatTile extends StatelessWidget {
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({
     required this.notificationsOn,
+    required this.reminderTime,
     required this.onNotificationsToggle,
   });
 
   final bool notificationsOn;
+  final String reminderTime;
   final ValueChanged<bool> onNotificationsToggle;
 
   @override
@@ -373,21 +429,16 @@ class _SettingsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'SETTINGS',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        Text('SETTINGS',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.fog,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-              ),
-        ),
+                letterSpacing: 1.2)),
         const SizedBox(height: 10),
         Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: AppRadius.cardBorderRadius,
-          ),
+              color: Colors.white, borderRadius: AppRadius.cardBorderRadius),
           child: Column(
             children: [
               _SettingsRow(
@@ -421,7 +472,7 @@ class _SettingsSection extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('9:00 AM',
+                    Text(reminderTime,
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium
@@ -439,27 +490,10 @@ class _SettingsSection extends StatelessWidget {
                 iconColor: AppColors.bubblegum,
                 iconBg: const Color(0xFFFEF0F6),
                 label: 'Weak words',
-                trailing: Row(
+                trailing: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: const BoxDecoration(
-                        color: AppColors.bubblegum,
-                        borderRadius: AppRadius.pill,
-                      ),
-                      child: const Text(
-                        '8',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right_rounded,
+                    Icon(Icons.chevron_right_rounded,
                         color: AppColors.fog, size: 20),
                   ],
                 ),
@@ -503,16 +537,14 @@ class _SettingsRow extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
+                  color: iconBg, borderRadius: BorderRadius.circular(10)),
               alignment: Alignment.center,
               child: Icon(icon, color: iconColor, size: 18),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
-            ),
+                child: Text(label,
+                    style: Theme.of(context).textTheme.bodyLarge)),
             trailing,
           ],
         ),
@@ -555,13 +587,13 @@ class _AccountSection extends StatelessWidget {
             children: [
               const Icon(Icons.logout_rounded, color: AppColors.bubblegum, size: 20),
               const SizedBox(width: 14),
-              Text(
-                'Sign out',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.bubblegum,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
+              Text('Sign out',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyLarge
+                      ?.copyWith(
+                          color: AppColors.bubblegum,
+                          fontWeight: FontWeight.w600)),
             ],
           ),
         ),

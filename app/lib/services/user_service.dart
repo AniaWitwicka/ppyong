@@ -1,0 +1,43 @@
+import '../models/user.dart';
+import 'api_service.dart';
+
+class UserService {
+  UserService._();
+  static final UserService instance = UserService._();
+
+  final _api = ApiService.instance;
+
+  Future<UserProfile> getMe() async {
+    final data = await _api.get('/me');
+    return UserProfile.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<UserStats> getMyStats() async {
+    final data = await _api.get('/me/stats');
+    return UserStats.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<UserSettings> getMySettings() async {
+    final data = await _api.get('/me/settings');
+    return UserSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<UserProfile> updateProfile({String? name, String? email}) async {
+    final data = await _api.patch('/me', {
+      if (name != null) 'name': name,
+      if (email != null) 'email': email,
+    });
+    return UserProfile.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<UserSettings> updateSettings({
+    bool? notificationsEnabled,
+    String? studyReminderTime,
+  }) async {
+    final data = await _api.patch('/me/settings', {
+      if (notificationsEnabled != null) 'notifications_enabled': notificationsEnabled,
+      if (studyReminderTime != null) 'study_reminder_time': studyReminderTime,
+    });
+    return UserSettings.fromJson(data as Map<String, dynamic>);
+  }
+}

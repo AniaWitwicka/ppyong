@@ -326,7 +326,7 @@ class _CollectionTile extends StatelessWidget {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => DeckDetailScreen(name: name, accentColor: accentColor),
+          builder: (_) => DeckDetailScreen(deckId: 'deck-1', accentColor: accentColor),
         ),
       ),
       child: Container(

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import '../models/deck.dart';
+import '../services/deck_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/edit_deck_sheet.dart';
 import '../widgets/add_flashcard_sheet.dart';
 import '../widgets/deck_share_dialog.dart';
 import 'flashcard_study_screen.dart';
 
+// Cards are still mocked until GET /decks/:id/cards is implemented.
 enum _CardStatus { mastered, learning, newCard }
 
 typedef _CardData = ({
@@ -26,28 +30,90 @@ const _mockCards = <_CardData>[
   (korean: '얼마예요?', romanisation: 'eolmayeyo?', translation: 'How much is it?', notes: '', status: _CardStatus.newCard),
 ];
 
-class DeckDetailScreen extends StatelessWidget {
+class DeckDetailScreen extends StatefulWidget {
   const DeckDetailScreen({
     super.key,
-    required this.name,
+    required this.deckId,
     required this.accentColor,
-    this.collectionName,
   });
 
-  final String name;
+  final String deckId;
   final Color accentColor;
-  final String? collectionName;
 
-  int get _mastered => _mockCards.where((c) => c.status == _CardStatus.mastered).length;
-  int get _learning => _mockCards.where((c) => c.status == _CardStatus.learning).length;
-  int get _newCards => _mockCards.where((c) => c.status == _CardStatus.newCard).length;
+  @override
+  State<DeckDetailScreen> createState() => _DeckDetailScreenState();
+}
+
+class _DeckDetailScreenState extends State<DeckDetailScreen> {
+  DeckDetail? _deck;
+  bool _loading = true;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _hasError = false; });
+    try {
+      final deck = await DeckService.instance.getDeck(widget.deckId);
+      setState(() { _deck = deck; _loading = false; });
+    } catch (_) {
+      setState(() { _loading = false; _hasError = true; });
+      if (mounted) {
+        showAppToast(context,
+            variant: ToastVariant.error,
+            title: 'Failed to load deck');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.offWhite,
+        body: Center(child: CircularProgressIndicator(color: AppColors.periwinkle)),
+      );
+    }
+
+    if (_hasError || _deck == null) {
+      return Scaffold(
+        backgroundColor: AppColors.offWhite,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('😕', style: TextStyle(fontSize: 48)),
+              const SizedBox(height: 16),
+              const Text('Could not load deck',
+                  style: TextStyle(color: AppColors.ash, fontSize: 16)),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: _load,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: const BoxDecoration(
+                      color: AppColors.periwinkle, borderRadius: AppRadius.pill),
+                  child: const Text('Try again',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final deck = _deck!;
+
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showAddFlashcardSheet(context, deckName: name, cardCount: _mockCards.length),
+        onPressed: () => showAddFlashcardSheet(context,
+            deckName: deck.name, cardCount: deck.cardCount),
         backgroundColor: AppColors.orange,
         elevation: 4,
         child: const Icon(Icons.add, color: Colors.white, size: 28),
@@ -56,19 +122,19 @@ class DeckDetailScreen extends StatelessWidget {
         child: Column(
           children: [
             _TopBar(
-              collectionName: collectionName ?? 'Collection',
-              accentColor: accentColor,
-              deckName: name,
+              collectionName: deck.collectionName,
+              accentColor: widget.accentColor,
+              deckName: deck.name,
             ),
             Expanded(
               child: ListView(
                 children: [
                   _HeroSection(
-                    deckName: name,
-                    mastered: _mastered,
-                    learning: _learning,
-                    newCards: _newCards,
-                    accentColor: accentColor,
+                    deckName: deck.name,
+                    mastered: deck.masteredCount,
+                    learning: deck.learningCount,
+                    newCards: deck.newCount,
+                    accentColor: widget.accentColor,
                   ),
                   const Divider(color: AppColors.border, height: 1),
                   _CardsHeader(),

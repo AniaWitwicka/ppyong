@@ -1,59 +1,13 @@
 import 'package:flutter/material.dart';
+import '../models/collection.dart';
+import '../services/collection_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_input.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/add_collection_sheet.dart';
-import 'deck_detail_screen.dart';
+import 'collection_detail_screen.dart';
 
 enum _Filter { all, inProgress, mastered, newCards }
-
-typedef _Collection = ({
-  String name,
-  String emoji,
-  int decks,
-  int words,
-  int due,
-  double progress,
-  Color color,
-});
-
-const _mockCollections = <_Collection>[
-  (
-    name: 'TOPIK Basics',
-    emoji: '📚',
-    decks: 4,
-    words: 48,
-    due: 12,
-    progress: 0.45,
-    color: AppColors.periwinkle,
-  ),
-  (
-    name: 'Food & Drink',
-    emoji: '🍜',
-    decks: 2,
-    words: 24,
-    due: 3,
-    progress: 0.7,
-    color: AppColors.bubblegum,
-  ),
-  (
-    name: 'K-drama phrases',
-    emoji: '💬',
-    decks: 3,
-    words: 36,
-    due: 0,
-    progress: 1.0,
-    color: AppColors.sunnyYellow,
-  ),
-  (
-    name: 'Numbers & Time',
-    emoji: '🕐',
-    decks: 2,
-    words: 20,
-    due: 5,
-    progress: 0.2,
-    color: AppColors.forestGreen,
-  ),
-];
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -63,11 +17,36 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  List<Collection> _collections = [];
+  bool _loading = true;
+  bool _hasError = false;
   _Filter _filter = _Filter.all;
   String _search = '';
 
-  List<_Collection> get _filtered {
-    var list = _mockCollections.where((c) {
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _hasError = false; });
+    try {
+      final collections = await CollectionService.instance.listCollections();
+      setState(() { _collections = collections; _loading = false; });
+    } catch (_) {
+      setState(() { _loading = false; _hasError = true; });
+      if (mounted) {
+        showAppToast(context,
+            variant: ToastVariant.error,
+            title: 'Failed to load collections',
+            subtitle: 'Check your connection and try again');
+      }
+    }
+  }
+
+  List<Collection> get _filtered {
+    var list = _collections.where((c) {
       if (_search.isNotEmpty) {
         return c.name.toLowerCase().contains(_search.toLowerCase());
       }
@@ -76,7 +55,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     return switch (_filter) {
       _Filter.inProgress => list.where((c) => c.progress > 0 && c.progress < 1).toList(),
-      _Filter.mastered   => list.where((c) => c.progress == 1.0).toList(),
+      _Filter.mastered   => list.where((c) => c.progress >= 1.0).toList(),
       _Filter.newCards   => list.where((c) => c.progress == 0).toList(),
       _Filter.all        => list,
     };
@@ -84,7 +63,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final collections = _filtered;
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       body: SafeArea(
@@ -97,39 +75,79 @@ class _LibraryScreenState extends State<LibraryScreen> {
               selected: _filter,
               onChanged: (f) => setState(() => _filter = f),
             ),
-            Expanded(
-              child: collections.isEmpty
-                  ? const _EmptyState()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-                      itemCount: collections.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, i) => _CollectionRow(
-                        collection: collections[i],
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => DeckDetailScreen(
-                              name: collections[i].name,
-                              accentColor: collections[i].color,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showAddCollectionSheet(context),
+        onPressed: () async {
+          await showAddCollectionSheet(context);
+          _load();
+        },
         backgroundColor: AppColors.orange,
         elevation: 4,
         child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
     );
   }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.periwinkle),
+      );
+    }
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('😕', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            const Text('Could not load collections',
+                style: TextStyle(color: AppColors.ash, fontSize: 16)),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: _load,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: const BoxDecoration(
+                    color: AppColors.periwinkle, borderRadius: AppRadius.pill),
+                child: const Text('Try again',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final collections = _filtered;
+    if (collections.isEmpty) return const _EmptyState();
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+      itemCount: collections.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, i) => _CollectionRow(
+        collection: collections[i],
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CollectionDetailScreen(
+              collectionId: collections[i].id,
+              collectionName: collections[i].name,
+              accentColor: collections[i].color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
+
+// ── Header ────────────────────────────────────────────────────────────────
 
 class _LibraryHeader extends StatelessWidget {
   const _LibraryHeader({required this.onSearch});
@@ -162,6 +180,8 @@ class _LibraryHeader extends StatelessWidget {
     );
   }
 }
+
+// ── Filter pills ──────────────────────────────────────────────────────────
 
 class _FilterPills extends StatelessWidget {
   const _FilterPills({required this.selected, required this.onChanged});
@@ -218,9 +238,11 @@ class _FilterPills extends StatelessWidget {
   }
 }
 
+// ── Collection row ────────────────────────────────────────────────────────
+
 class _CollectionRow extends StatelessWidget {
   const _CollectionRow({required this.collection, required this.onTap});
-  final _Collection collection;
+  final Collection collection;
   final VoidCallback onTap;
 
   @override
@@ -268,7 +290,7 @@ class _CollectionRow extends StatelessWidget {
                               ),
                         ),
                       ),
-                      if (collection.due > 0)
+                      if (collection.dueCount > 0)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: const BoxDecoration(
@@ -276,7 +298,7 @@ class _CollectionRow extends StatelessWidget {
                             borderRadius: AppRadius.pill,
                           ),
                           child: Text(
-                            '${collection.due} due',
+                            '${collection.dueCount} due',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -288,7 +310,7 @@ class _CollectionRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${collection.decks} decks · ${collection.words} words',
+                    '${collection.deckCount} decks · ${collection.wordCount} words',
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium
@@ -316,6 +338,8 @@ class _CollectionRow extends StatelessWidget {
   }
 }
 
+// ── Empty state ───────────────────────────────────────────────────────────
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
@@ -327,10 +351,8 @@ class _EmptyState extends StatelessWidget {
         children: [
           const Text('📚', style: TextStyle(fontSize: 56)),
           const SizedBox(height: 16),
-          Text(
-            'No collections yet',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
+          Text('No collections yet',
+              style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
             'Tap + to create your first collection',

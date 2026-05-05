@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../services/collection_service.dart';
 import '../theme/app_theme.dart';
 import 'app_bottom_sheet.dart';
 import 'app_input.dart';
+import 'app_toast.dart';
 
 const _colors = [
   AppColors.periwinkle,
@@ -32,6 +34,35 @@ class _AddCollectionSheetState extends State<_AddCollectionSheet> {
   final _descCtrl = TextEditingController();
   Color _selectedColor = _colors[0];
   String _selectedEmoji = _emojis[0];
+  bool _saving = false;
+
+  String get _colorHex =>
+      '#${_selectedColor.value.toRadixString(16).substring(2).toUpperCase()}';
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await CollectionService.instance.createCollection(
+        name: name,
+        emoji: _selectedEmoji,
+        color: _colorHex,
+      );
+      if (!mounted) return;
+      showAppToast(context,
+          variant: ToastVariant.success,
+          title: 'Collection created',
+          subtitle: name);
+      Navigator.pop(context);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      showAppToast(context,
+          variant: ToastVariant.error,
+          title: 'Could not create collection');
+    }
+  }
 
   @override
   void dispose() {
@@ -122,10 +153,7 @@ class _AddCollectionSheetState extends State<_AddCollectionSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: GestureDetector(
-                onTap: () {
-                  // TODO: save to backend
-                  Navigator.pop(context);
-                },
+                onTap: _saving ? null : _save,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: const BoxDecoration(

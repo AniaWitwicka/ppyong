@@ -7,6 +7,14 @@ import (
 	"github.com/yourname/koreanapp-backend/internal/model"
 )
 
+var mockUsers = []model.UserSummary{
+	{ID: "00000000-0000-0000-0000-000000000001", Name: "Ania Witwicka", Initials: "AW", Role: model.RoleTeacher},
+	{ID: "00000000-0000-0000-0000-000000000002", Name: "Mia Chen",      Initials: "MC", Role: model.RoleLearner},
+	{ID: "00000000-0000-0000-0000-000000000003", Name: "Jake Kim",      Initials: "JK", Role: model.RoleLearner},
+	{ID: "00000000-0000-0000-0000-000000000004", Name: "Sophie Park",   Initials: "SP", Role: model.RoleLearner},
+	{ID: "00000000-0000-0000-0000-000000000005", Name: "Tom Lee",       Initials: "TL", Role: model.RoleLearner},
+}
+
 // mockDecks maps collection ID → list of decks in that collection.
 var mockDecks = map[string][]model.DeckSummary{
 	"col-1": {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_input.dart';
+import '../widgets/app_toast.dart';
 import 'home_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -61,6 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// ── Hero band ─────────────────────────────────────────────────────────────
+
 class _HeroBand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -111,6 +115,8 @@ class _HeroBand extends StatelessWidget {
   }
 }
 
+// ── Toggle pill ───────────────────────────────────────────────────────────
+
 class _TogglePill extends StatelessWidget {
   const _TogglePill({required this.isLogin, required this.onToggle});
   final bool isLogin;
@@ -152,13 +158,7 @@ class _PillOption extends StatelessWidget {
             color: active ? Colors.white : Colors.transparent,
             borderRadius: AppRadius.pill,
             boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: AppColors.ink.withOpacity(0.08),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
+                ? [BoxShadow(color: AppColors.ink.withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 2))]
                 : null,
           ),
           alignment: Alignment.center,
@@ -176,6 +176,8 @@ class _PillOption extends StatelessWidget {
   }
 }
 
+// ── Login form ────────────────────────────────────────────────────────────
+
 class _LoginForm extends StatefulWidget {
   const _LoginForm({super.key});
 
@@ -187,12 +189,36 @@ class _LoginFormState extends State<_LoginForm> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _showPassword = false;
+  bool _loading = false;
 
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    if (email.isEmpty || password.isEmpty) return;
+
+    setState(() => _loading = true);
+    try {
+      await AuthService.instance.login(email, password);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showAppToast(context,
+          variant: ToastVariant.error,
+          title: 'Login failed',
+          subtitle: 'Check your email and password');
+    }
   }
 
   @override
@@ -218,26 +244,18 @@ class _LoginFormState extends State<_LoginForm> {
             ),
             child: const Text(
               'Forgot password?',
-              style: TextStyle(
-                color: AppColors.periwinkle,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: AppColors.periwinkle, fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
         ),
         const SizedBox(height: 24),
-        _OrangeCta(
-          label: 'Log in',
-          onTap: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-          ),
-        ),
+        _OrangeCta(label: 'Log in', loading: _loading, onTap: _submit),
       ],
     );
   }
 }
+
+// ── Register form ─────────────────────────────────────────────────────────
 
 class _RegisterForm extends StatefulWidget {
   const _RegisterForm({super.key});
@@ -253,6 +271,7 @@ class _RegisterFormState extends State<_RegisterForm> {
   final _confirmCtrl = TextEditingController();
   bool _showPassword = false;
   bool _showConfirm = false;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -261,6 +280,40 @@ class _RegisterFormState extends State<_RegisterForm> {
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    final confirm = _confirmCtrl.text;
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty) return;
+    if (password != confirm) {
+      showAppToast(context, variant: ToastVariant.error, title: 'Passwords do not match');
+      return;
+    }
+    if (password.length < 8) {
+      showAppToast(context, variant: ToastVariant.error, title: 'Password must be at least 8 characters');
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      await AuthService.instance.register(name, email, password);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showAppToast(context,
+          variant: ToastVariant.error,
+          title: 'Registration failed',
+          subtitle: 'Email may already be in use');
+    }
   }
 
   @override
@@ -294,25 +347,17 @@ class _RegisterFormState extends State<_RegisterForm> {
           ),
           child: const Text(
             "You'll join as a Member. Your study group admin can update your role after you join.",
-            style: TextStyle(
-              color: AppColors.periwinkle,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
+            style: TextStyle(color: AppColors.periwinkle, fontSize: 13, fontWeight: FontWeight.w500),
           ),
         ),
         const SizedBox(height: 24),
-        _OrangeCta(
-          label: 'Create account',
-          onTap: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-          ),
-        ),
+        _OrangeCta(label: 'Create account', loading: _loading, onTap: _submit),
       ],
     );
   }
 }
+
+// ── Shared widgets ────────────────────────────────────────────────────────
 
 class _PasswordInput extends StatelessWidget {
   const _PasswordInput({
@@ -331,11 +376,7 @@ class _PasswordInput extends StatelessWidget {
     return TextField(
       controller: controller,
       obscureText: !show,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: AppColors.ink,
-      ),
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: AppColors.fog, fontSize: 14),
@@ -364,29 +405,29 @@ class _PasswordInput extends StatelessWidget {
 }
 
 class _OrangeCta extends StatelessWidget {
-  const _OrangeCta({required this.label, required this.onTap});
+  const _OrangeCta({required this.label, required this.onTap, this.loading = false});
   final String label;
   final VoidCallback onTap;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: loading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: const BoxDecoration(
-          color: AppColors.orange,
-          borderRadius: AppRadius.pill,
-        ),
+        decoration: const BoxDecoration(color: AppColors.orange, borderRadius: AppRadius.pill),
         alignment: Alignment.center,
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        child: loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              )
+            : Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
       ),
     );
   }

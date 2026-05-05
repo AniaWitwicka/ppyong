@@ -1,0 +1,87 @@
+package repository
+
+import (
+	"context"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/yourname/koreanapp-backend/internal/model"
+)
+
+type AuthRepository struct {
+	pool *pgxpool.Pool
+}
+
+func NewAuthRepository(pool *pgxpool.Pool) *AuthRepository {
+	return &AuthRepository{pool: pool}
+}
+
+type UserWithPassword struct {
+	ID           string
+	PasswordHash string
+}
+
+func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHash string) (*model.UserProfile, error) {
+	initials := computeInitials(name)
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var p model.UserProfile
+	err = tx.QueryRow(ctx, `
+		INSERT INTO users (email, name, role, initials, password_hash)
+		VALUES ($1, $2, 'learner', $3, $4)
+		RETURNING id, email, name, role, initials, streak, best_streak, last_active
+	`, email, name, initials, passwordHash).Scan(
+		&p.ID, &p.Email, &p.Name, &p.Role, &p.Initials,
+		&p.Streak, &p.BestStreak, new(any),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO user_settings (user_id) VALUES ($1)
+	`, p.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *AuthRepository) GetByEmail(ctx context.Context, email string) (*UserWithPassword, error) {
+	var u UserWithPassword
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, password_hash FROM users WHERE email = $1
+	`, email).Scan(&u.ID, &u.PasswordHash)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func computeInitials(name string) string {
+	parts := strings.Fields(name)
+	if len(parts) == 0 {
+		return "?"
+	}
+	if len(parts) == 1 {
+		r1, s1 := utf8.DecodeRuneInString(parts[0])
+		if len(parts[0]) > s1 {
+			r2, _ := utf8.DecodeRuneInString(parts[0][s1:])
+			return strings.ToUpper(string(r1) + string(r2))
+		}
+		return strings.ToUpper(string(r1))
+	}
+	r1, _ := utf8.DecodeRuneInString(parts[0])
+	r2, _ := utf8.DecodeRuneInString(parts[len(parts)-1])
+	return strings.ToUpper(string(r1) + string(r2))
+}

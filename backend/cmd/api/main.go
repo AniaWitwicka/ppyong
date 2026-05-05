@@ -9,6 +9,7 @@ import (
 	"github.com/yourname/koreanapp-backend/internal/db"
 	"github.com/yourname/koreanapp-backend/internal/handler"
 	"github.com/yourname/koreanapp-backend/internal/middleware"
+	"github.com/yourname/koreanapp-backend/internal/repository"
 )
 
 func main() {
@@ -23,6 +24,9 @@ func main() {
 	defer pool.Close()
 	log.Println("database connected")
 
+	userHandler := handler.NewUserHandler(repository.NewUserRepository(pool))
+	authHandler := handler.NewAuthHandler(repository.NewAuthRepository(pool))
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -30,41 +34,48 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Health check
+	// Public routes
 	mux.HandleFunc("GET /ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"message":"pong"}`))
 	})
+	mux.HandleFunc("POST /auth/register", authHandler.Register)
+	mux.HandleFunc("POST /auth/login", authHandler.Login)
 
-	// Current user aliases — resolve to the authenticated user once JWT is wired
-	mux.HandleFunc("GET /me", handler.GetMe)
-	mux.HandleFunc("PATCH /me", handler.UpdateMe)
-	mux.HandleFunc("GET /me/stats", handler.GetMyStats)
-	mux.HandleFunc("GET /me/settings", handler.GetMySettings)
-	mux.HandleFunc("PATCH /me/settings", handler.UpdateMySettings)
+	// Protected routes — require valid JWT
+	auth := func(h http.HandlerFunc) http.HandlerFunc {
+		return middleware.RequireAuth(h).ServeHTTP
+	}
+
+	// Current user
+	mux.HandleFunc("GET /me", auth(userHandler.GetMe))
+	mux.HandleFunc("PATCH /me", auth(userHandler.UpdateMe))
+	mux.HandleFunc("GET /me/stats", auth(userHandler.GetMyStats))
+	mux.HandleFunc("GET /me/settings", auth(userHandler.GetMySettings))
+	mux.HandleFunc("PATCH /me/settings", auth(userHandler.UpdateMySettings))
 
 	// Collections
-	mux.HandleFunc("GET /collections", handler.ListCollections)
-	mux.HandleFunc("POST /collections", handler.CreateCollection)
-	mux.HandleFunc("GET /collections/{id}", handler.GetCollection)
-	mux.HandleFunc("PATCH /collections/{id}", handler.UpdateCollection)
-	mux.HandleFunc("DELETE /collections/{id}", handler.DeleteCollection)
-	mux.HandleFunc("GET /collections/{id}/decks", handler.ListDecks)
-	mux.HandleFunc("POST /collections/{id}/decks", handler.CreateDeck)
+	mux.HandleFunc("GET /collections", auth(handler.ListCollections))
+	mux.HandleFunc("POST /collections", auth(handler.CreateCollection))
+	mux.HandleFunc("GET /collections/{id}", auth(handler.GetCollection))
+	mux.HandleFunc("PATCH /collections/{id}", auth(handler.UpdateCollection))
+	mux.HandleFunc("DELETE /collections/{id}", auth(handler.DeleteCollection))
+	mux.HandleFunc("GET /collections/{id}/decks", auth(handler.ListDecks))
+	mux.HandleFunc("POST /collections/{id}/decks", auth(handler.CreateDeck))
 
 	// Decks
-	mux.HandleFunc("GET /decks/{id}", handler.GetDeck)
-	mux.HandleFunc("PATCH /decks/{id}", handler.UpdateDeck)
-	mux.HandleFunc("DELETE /decks/{id}", handler.DeleteDeck)
-	mux.HandleFunc("POST /decks/{id}/share", handler.ShareDeck)
+	mux.HandleFunc("GET /decks/{id}", auth(handler.GetDeck))
+	mux.HandleFunc("PATCH /decks/{id}", auth(handler.UpdateDeck))
+	mux.HandleFunc("DELETE /decks/{id}", auth(handler.DeleteDeck))
+	mux.HandleFunc("POST /decks/{id}/share", auth(handler.ShareDeck))
 
 	// Users
-	mux.HandleFunc("GET /users", handler.ListUsers)
-	mux.HandleFunc("GET /users/{id}", handler.GetUser)
-	mux.HandleFunc("PATCH /users/{id}", handler.UpdateUser)
-	mux.HandleFunc("GET /users/{id}/stats", handler.GetUserStats)
-	mux.HandleFunc("GET /users/{id}/settings", handler.GetUserSettings)
-	mux.HandleFunc("PATCH /users/{id}/settings", handler.UpdateUserSettings)
+	mux.HandleFunc("GET /users", auth(userHandler.ListUsers))
+	mux.HandleFunc("GET /users/{id}", auth(userHandler.GetUser))
+	mux.HandleFunc("PATCH /users/{id}", auth(userHandler.UpdateUser))
+	mux.HandleFunc("GET /users/{id}/stats", auth(userHandler.GetUserStats))
+	mux.HandleFunc("GET /users/{id}/settings", auth(userHandler.GetUserSettings))
+	mux.HandleFunc("PATCH /users/{id}/settings", auth(userHandler.UpdateUserSettings))
 
 	srv := &http.Server{
 		Addr:    ":" + port,

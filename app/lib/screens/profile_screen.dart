@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/user.dart';
+import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../widgets/app_toast.dart';
+import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -570,6 +572,16 @@ class _SettingsDivider extends StatelessWidget {
 class _AccountSection extends StatelessWidget {
   const _AccountSection();
 
+  Future<void> _signOut(BuildContext context) async {
+    await AuthService.instance.logout();
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -579,7 +591,7 @@ class _AccountSection extends StatelessWidget {
         border: Border.all(color: AppColors.bubblegum, width: 1.5),
       ),
       child: InkWell(
-        onTap: () {},
+        onTap: () => _signOut(context),
         borderRadius: AppRadius.cardBorderRadius,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

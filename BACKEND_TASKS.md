@@ -7,16 +7,16 @@
 ## 1. Infrastructure
 
 - [x] `/ping` health check endpoint with request logging
-- [ ] Database connection — Supabase PostgreSQL via pgx
-  - [ ] Create Supabase project and copy connection string (Settings → Database → URI)
-  - [ ] Add `github.com/jackc/pgx/v5` and `github.com/joho/godotenv` to `go.mod`
-  - [ ] Create `backend/.env` with `DATABASE_URL`, `PORT`, `JWT_SECRET`, `ALLOWED_ORIGINS`
-  - [ ] Create `backend/internal/db/db.go` — opens `pgxpool.Pool` from `DATABASE_URL`, `Ping()` on startup
-  - [ ] Wire pool into `main.go` — fail fast if connection fails
-  - [ ] Test: `GET /ping` returns `{"message":"pong"}` and logs show DB connected
-- [ ] JWT auth middleware (attach to all protected routes)
-- [ ] CORS config (allow Vercel origin + localhost)
-- [ ] `.env` loading via godotenv (`PORT`, `DATABASE_URL`, `JWT_SECRET`, `ALLOWED_ORIGINS`)
+- [x] Database connection — Supabase PostgreSQL via pgx
+  - [x] Create Supabase project and copy connection string
+  - [x] Add `github.com/jackc/pgx/v5` and `github.com/joho/godotenv` to `go.mod`
+  - [x] Create `backend/.env` with `DATABASE_URL`, `PORT`, `JWT_SECRET`, `ALLOWED_ORIGINS`
+  - [x] Create `backend/internal/db/db.go` — opens `pgxpool.Pool` from `DATABASE_URL`, `Ping()` on startup
+  - [x] Wire pool into `main.go` — fail fast if connection fails
+  - [x] Test: DB connected log on startup
+- [x] JWT auth middleware — `middleware.RequireAuth`, applied to all non-public routes
+- [x] CORS config (allow all origins for now)
+- [x] `.env` loading via godotenv
 
 ---
 
@@ -24,10 +24,10 @@
 
 Needed by: **Login screen**, **Forgot password screen**
 
-- [ ] `POST /auth/register` — name, email, password → JWT token + user object
-- [ ] `POST /auth/login` — email, password → JWT token + user object
+- [x] `POST /auth/register` — name, email, password → JWT token + user object
+- [x] `POST /auth/login` — email, password → JWT token + user object
 - [ ] `POST /auth/forgot-password` — email → sends reset link (Supabase email or custom)
-- [ ] Role field on user: everyone registers as `member`; `teacher` / `admin` set manually in DB
+- [x] Role field on user: everyone registers as `learner`; `teacher` / `admin` set manually in DB
 
 ---
 
@@ -46,10 +46,13 @@ All routes under `/users/:id` work for any user — permission checks gate what 
 - [x] `PATCH /users/:id/settings` — notifications_enabled (bool), study_reminder_time (string); own account only
 - [x] `GET /users` — list all users in the group (for sharing dialog); returns id, name, initials, role
 - [ ] `POST /auth/logout` — invalidate token / clear session
-- [ ] Connect all of the above to real DB queries (currently mocked)
-  - [ ] `backend/internal/repository/user_repository.go` — GetByID, GetStats, GetSettings, Update, UpdateSettings, List
-  - [ ] SQL migrations: `users` table with streak, best_streak, last_active, role, initials
-  - [ ] SQL migrations: `user_settings` table with notifications_enabled, study_reminder_time
+- [x] Connect all of the above to real DB queries
+  - [x] `backend/internal/repository/user_repository.go` — GetByID, GetStats, GetSettings, Update, UpdateSettings, List
+  - [x] `backend/internal/repository/auth_repository.go` — CreateUser, GetByEmail
+  - [x] SQL migrations: `users` table with streak, best_streak, last_active, role, initials (001, 002)
+  - [x] SQL migration: `user_settings` table (002)
+  - [x] SQL migration: seed users with fixed UUIDs (004)
+  - [x] SQL migration: add password_hash column (005)
 
 ---
 

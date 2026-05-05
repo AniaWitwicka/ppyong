@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
-import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() {
   runApp(const PpyongApp());
@@ -14,7 +14,7 @@ class PpyongApp extends StatelessWidget {
     return MaterialApp(
       title: '뿅',
       theme: AppTheme.light,
-      home: const HomeScreen(),
+      home: const LoginScreen(),
     );
   }
 }

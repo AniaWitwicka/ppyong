@@ -3,8 +3,11 @@ import '../theme/app_theme.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import '../widgets/app_bottom_sheet.dart';
+import '../widgets/app_input.dart';
 import '../widgets/app_toast.dart';
 import 'login_screen.dart';
+import 'weak_words_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,7 +19,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   UserProfile? _profile;
   UserStats? _stats;
-  UserSettings? _settings;
   bool _loading = true;
   bool _hasError = false;
 
@@ -32,12 +34,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final results = await Future.wait([
         UserService.instance.getMe(),
         UserService.instance.getMyStats(),
-        UserService.instance.getMySettings(),
       ]);
       setState(() {
         _profile = results[0] as UserProfile;
         _stats   = results[1] as UserStats;
-        _settings = results[2] as UserSettings;
         _loading = false;
       });
     } catch (_) {
@@ -51,21 +51,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _toggleNotifications(bool value) async {
-    // Optimistic update
-    setState(() => _settings = _settings?.copyWith(notificationsEnabled: value));
+
+  Future<void> _showEditProfileSheet() async {
+    final profile = _profile;
+    if (profile == null) return;
+    final nameCtrl = TextEditingController(text: profile.name);
+    final emailCtrl = TextEditingController(text: profile.email);
+    final saved = await showAppBottomSheet<bool>(
+      context: context,
+      child: _EditProfileSheet(nameCtrl: nameCtrl, emailCtrl: emailCtrl),
+    );
+    final name = nameCtrl.text.trim();
+    final email = emailCtrl.text.trim();
+    nameCtrl.dispose();
+    emailCtrl.dispose();
+    if (saved != true) return;
     try {
-      final updated = await UserService.instance.updateSettings(notificationsEnabled: value);
-      setState(() => _settings = updated);
-    } catch (_) {
-      // Revert
-      setState(() => _settings = _settings?.copyWith(notificationsEnabled: !value));
+      final updated = await UserService.instance.updateProfile(
+        name: name.isNotEmpty ? name : null,
+        email: email.isNotEmpty ? email : null,
+      );
       if (mounted) {
-        showAppToast(context,
-            variant: ToastVariant.error,
-            title: 'Could not save setting',
-            subtitle: 'Try again in a moment');
+        setState(() => _profile = updated);
+        showAppToast(context, variant: ToastVariant.success, title: 'Profile updated');
       }
+    } catch (_) {
+      if (mounted) showAppToast(context, variant: ToastVariant.error, title: 'Failed to update profile');
     }
   }
 
@@ -108,7 +119,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final profile = _profile!;
     final stats = _stats!;
-    final settings = _settings!;
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
@@ -143,9 +153,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 24),
                     _SettingsSection(
-                      notificationsOn: settings.notificationsEnabled,
-                      reminderTime: settings.displayReminderTime,
-                      onNotificationsToggle: _toggleNotifications,
+                      onEditProfile: _showEditProfileSheet,
+                      onWeakWords: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const WeakWordsScreen())),
                     ),
                     const SizedBox(height: 16),
                     const _AccountSection(),
@@ -416,15 +426,10 @@ class _StatTile extends StatelessWidget {
 // ── Settings ──────────────────────────────────────────────────────────────
 
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({
-    required this.notificationsOn,
-    required this.reminderTime,
-    required this.onNotificationsToggle,
-  });
+  const _SettingsSection({required this.onEditProfile, required this.onWeakWords});
 
-  final bool notificationsOn;
-  final String reminderTime;
-  final ValueChanged<bool> onNotificationsToggle;
+  final VoidCallback onEditProfile;
+  final VoidCallback onWeakWords;
 
   @override
   Widget build(BuildContext context) {
@@ -450,41 +455,7 @@ class _SettingsSection extends StatelessWidget {
                 label: 'Edit profile',
                 trailing: const Icon(Icons.chevron_right_rounded,
                     color: AppColors.fog, size: 20),
-                onTap: () {},
-              ),
-              const _SettingsDivider(),
-              _SettingsRow(
-                icon: Icons.notifications_outlined,
-                iconColor: AppColors.forestGreen,
-                iconBg: const Color(0xFFE8F5EE),
-                label: 'Notifications',
-                trailing: Switch(
-                  value: notificationsOn,
-                  onChanged: onNotificationsToggle,
-                  activeColor: AppColors.forestGreen,
-                ),
-                onTap: null,
-              ),
-              const _SettingsDivider(),
-              _SettingsRow(
-                icon: Icons.alarm_outlined,
-                iconColor: AppColors.orange,
-                iconBg: const Color(0xFFFEF3EC),
-                label: 'Study reminder',
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(reminderTime,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: AppColors.ash)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right_rounded,
-                        color: AppColors.fog, size: 20),
-                  ],
-                ),
-                onTap: () {},
+                onTap: onEditProfile,
               ),
               const _SettingsDivider(),
               _SettingsRow(
@@ -492,14 +463,9 @@ class _SettingsSection extends StatelessWidget {
                 iconColor: AppColors.bubblegum,
                 iconBg: const Color(0xFFFEF0F6),
                 label: 'Weak words',
-                trailing: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.chevron_right_rounded,
-                        color: AppColors.fog, size: 20),
-                  ],
-                ),
-                onTap: () {},
+                trailing: const Icon(Icons.chevron_right_rounded,
+                    color: AppColors.fog, size: 20),
+                onTap: onWeakWords,
               ),
             ],
           ),
@@ -563,6 +529,105 @@ class _SettingsDivider extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.only(left: 62),
       child: Divider(color: AppColors.border, height: 1),
+    );
+  }
+}
+
+// ── Labeled input ─────────────────────────────────────────────────────────
+
+class _LabeledInput extends StatelessWidget {
+  const _LabeledInput({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppColors.ash, fontSize: 12, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+// ── Edit profile sheet ────────────────────────────────────────────────────
+
+class _EditProfileSheet extends StatelessWidget {
+  const _EditProfileSheet({required this.nameCtrl, required this.emailCtrl});
+
+  final TextEditingController nameCtrl;
+  final TextEditingController emailCtrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20, right: 20, top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border, borderRadius: AppRadius.pill),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Edit profile',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 20),
+          _LabeledInput(label: 'Name', child: AppInput(controller: nameCtrl, hint: 'Your name')),
+          const SizedBox(height: 14),
+          _LabeledInput(label: 'Email', child: AppInput(controller: emailCtrl, hint: 'your@email.com',
+              keyboardType: TextInputType.emailAddress)),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: AppColors.ash, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.periwinkle,
+                    foregroundColor: Colors.white,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: const Text('Save',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
+import '../services/card_service.dart';
 import '../theme/app_theme.dart';
 import 'app_bottom_sheet.dart';
 import 'app_input.dart';
 import 'app_toast.dart';
 
-Future<void> showAddFlashcardSheet(BuildContext context, {required String deckName, int cardCount = 0}) {
+Future<void> showAddFlashcardSheet(
+  BuildContext context, {
+  required String deckId,
+  required String deckName,
+  int cardCount = 0,
+}) {
   return showAppBottomSheet(
     context: context,
-    child: _AddFlashcardSheet(deckName: deckName, cardCount: cardCount),
+    child: _AddFlashcardSheet(deckId: deckId, deckName: deckName, cardCount: cardCount),
   );
 }
 
 class _AddFlashcardSheet extends StatefulWidget {
-  const _AddFlashcardSheet({required this.deckName, required this.cardCount});
+  const _AddFlashcardSheet({
+    required this.deckId,
+    required this.deckName,
+    required this.cardCount,
+  });
+  final String deckId;
   final String deckName;
   final int cardCount;
 
@@ -26,6 +37,7 @@ class _AddFlashcardSheetState extends State<_AddFlashcardSheet> {
   final _translationCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   late int _cardCount;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -47,6 +59,47 @@ class _AddFlashcardSheetState extends State<_AddFlashcardSheet> {
     _romanisationCtrl.clear();
     _translationCtrl.clear();
     _notesCtrl.clear();
+  }
+
+  Future<void> _save({required bool andNext}) async {
+    final korean = _koreanCtrl.text.trim();
+    final translation = _translationCtrl.text.trim();
+    if (korean.isEmpty || translation.isEmpty) {
+      showAppToast(context,
+          variant: ToastVariant.error,
+          title: 'Korean and translation required');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await CardService.instance.createCard(
+        widget.deckId,
+        korean: korean,
+        romanisation: _romanisationCtrl.text.trim(),
+        translation: translation,
+        notes: _notesCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      if (andNext) {
+        setState(() {
+          _cardCount++;
+          _saving = false;
+          _clearForm();
+        });
+        showAppToast(context,
+            variant: ToastVariant.info,
+            title: 'Card saved',
+            subtitle: 'Add another or close when done');
+      } else {
+        Navigator.pop(context, true);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      showAppToast(context,
+          variant: ToastVariant.error,
+          title: 'Failed to save card');
+    }
   }
 
   @override
@@ -80,18 +133,10 @@ class _AddFlashcardSheetState extends State<_AddFlashcardSheet> {
         TextField(
           controller: _koreanCtrl,
           autofocus: true,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
           decoration: InputDecoration(
             hintText: '한국어 (Korean)',
-            hintStyle: const TextStyle(
-              color: AppColors.fog,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+            hintStyle: const TextStyle(color: AppColors.fog, fontSize: 18, fontWeight: FontWeight.w700),
             filled: true,
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -116,7 +161,7 @@ class _AddFlashcardSheetState extends State<_AddFlashcardSheet> {
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: _saving ? null : () => _save(andNext: false),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -125,40 +170,29 @@ class _AddFlashcardSheetState extends State<_AddFlashcardSheet> {
                   ),
                   alignment: Alignment.center,
                   child: Text('Save & close',
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelLarge
-                          ?.copyWith(color: AppColors.ash)),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.ash)),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _cardCount++;
-                    _clearForm();
-                  });
-                  showAppToast(
-                    context,
-                    variant: ToastVariant.info,
-                    title: 'Card saved',
-                    subtitle: 'Add another or close when done',
-                  );
-                },
+                onTap: _saving ? null : () => _save(andNext: true),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: const BoxDecoration(
-                    color: AppColors.orange,
-                    borderRadius: AppRadius.pill,
-                  ),
+                  decoration: const BoxDecoration(color: AppColors.orange, borderRadius: AppRadius.pill),
                   alignment: Alignment.center,
-                  child: Text('Save & add next',
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelLarge
-                          ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : Text('Save & add next',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
                 ),
               ),
             ),

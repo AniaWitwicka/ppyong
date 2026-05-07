@@ -86,3 +86,24 @@ class UserSettings {
         studyReminderTime: j['study_reminder_time'] as String,
       );
 }
+
+class UserSummary {
+  const UserSummary({
+    required this.id,
+    required this.name,
+    required this.initials,
+    required this.role,
+  });
+
+  final String id;
+  final String name;
+  final String initials;
+  final String role;
+
+  factory UserSummary.fromJson(Map<String, dynamic> j) => UserSummary(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        initials: j['initials'] as String? ?? '',
+        role: j['role'] as String,
+      );
+}

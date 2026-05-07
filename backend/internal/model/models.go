@@ -151,6 +151,116 @@ type Card struct {
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
+// CardSummary is returned by GET /decks/:id/cards.
+type CardSummary struct {
+	ID           string     `json:"id"`
+	Korean       string     `json:"korean"`
+	Romanisation string     `json:"romanisation"`
+	Translation  string     `json:"translation"`
+	Notes        string     `json:"notes"`
+	Status       string     `json:"status"` // "new" | "learning" | "mastered"
+	DueDate      *time.Time `json:"due_date"`
+}
+
+// WeakCard is returned by GET /me/weak-words — cards the user struggles with.
+type WeakCard struct {
+	ID             string  `json:"id"`
+	Korean         string  `json:"korean"`
+	Romanisation   string  `json:"romanisation"`
+	Translation    string  `json:"translation"`
+	Notes          string  `json:"notes"`
+	DeckID         string  `json:"deck_id"`
+	DeckName       string  `json:"deck_name"`
+	CollectionName string  `json:"collection_name"`
+	EaseFactor     float64 `json:"ease_factor"`
+	IntervalDays   int     `json:"interval_days"`
+}
+
+// ── Groups ────────────────────────────────────────────────────────────────
+
+type MemberAvatar struct {
+	Initials string `json:"initials"`
+	Color    string `json:"color"`
+}
+
+type GroupSummary struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Emoji       string         `json:"emoji"`
+	Color       string         `json:"color"`
+	MemberCount int            `json:"member_count"`
+	DeckCount   int            `json:"deck_count"`
+	LastActive  *time.Time     `json:"last_active"`
+	Avatars     []MemberAvatar `json:"avatars"`
+}
+
+type GroupMember struct {
+	UserID   string  `json:"user_id"`
+	Name     string  `json:"name"`
+	Initials string  `json:"initials"`
+	Role     string  `json:"role"` // "owner" | "member"
+	Progress float64 `json:"progress"`
+}
+
+type GroupDetail struct {
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Emoji       string        `json:"emoji"`
+	Color       string        `json:"color"`
+	MemberCount int           `json:"member_count"`
+	DeckCount   int           `json:"deck_count"`
+	IsOwner     bool          `json:"is_owner"`
+	Members     []GroupMember `json:"members"`
+	SharedDecks []DeckSummary `json:"shared_decks"`
+}
+
+type CreateGroupRequest struct {
+	Name  string `json:"name"`
+	Emoji string `json:"emoji"`
+	Color string `json:"color"`
+}
+
+type UpdateGroupRequest struct {
+	Name  *string `json:"name"`
+	Emoji *string `json:"emoji"`
+	Color *string `json:"color"`
+}
+
+// ── Invites ───────────────────────────────────────────────────────────────
+
+type Invite struct {
+	ID           string    `json:"id"`
+	GroupID      string    `json:"group_id"`
+	GroupName    string    `json:"group_name"`
+	GroupEmoji   string    `json:"group_emoji"`
+	GroupColor   string    `json:"group_color"`
+	InviterName  string    `json:"inviter_name"`
+	InviteeEmail string    `json:"invitee_email"`
+	Status       string    `json:"status"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type InviteListResponse struct {
+	Incoming []Invite `json:"incoming"`
+	Sent     []Invite `json:"sent"`
+}
+
+// ── Friends ───────────────────────────────────────────────────────────────
+
+type Friend struct {
+	FriendshipID string `json:"friendship_id"`
+	UserID       string `json:"user_id"`
+	Name         string `json:"name"`
+	Initials     string `json:"initials"`
+	Role         Role   `json:"role"`
+	Streak       int    `json:"streak"`
+	WordCount    int    `json:"word_count"`
+	DueCount     int    `json:"due_count"`
+}
+
+// ── SRS ───────────────────────────────────────────────────────────────────
+
 type SRSProgress struct {
 	ID           string     `json:"id" db:"id"`
 	UserID       string     `json:"user_id" db:"user_id"`

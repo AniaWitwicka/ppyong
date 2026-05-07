@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import '../models/collection.dart';
+import '../services/collection_service.dart';
 import '../theme/app_theme.dart';
-import 'deck_detail_screen.dart';
+import 'collection_detail_screen.dart';
 import 'flashcard_study_screen.dart';
+import '../services/invite_service.dart';
+import 'groups_screen.dart';
 import 'library_screen.dart';
 import 'profile_screen.dart';
 
@@ -14,50 +18,76 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _navIndex = 0;
+  int _homeRefreshKey = 0;
+  int _groupsBadge = 0;
 
-  static const _screens = [
-    _HomeTab(),
-    FlashcardStudyScreen(),
-    LibraryScreen(),
-    ProfileScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadGroupsBadge();
+  }
+
+  Future<void> _loadGroupsBadge() async {
+    try {
+      final count = await InviteService.instance.pendingCount();
+      if (mounted) setState(() => _groupsBadge = count);
+    } catch (_) {}
+  }
+
+  void _onTabTap(int i) {
+    if (i == 0 && _navIndex != 0) _homeRefreshKey++;
+    // Refresh badge when leaving Groups tab
+    if (_navIndex == 3 && i != 3) _loadGroupsBadge();
+    setState(() => _navIndex = i);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
-      body: IndexedStack(index: _navIndex, children: _screens),
+      body: IndexedStack(
+        index: _navIndex,
+        children: [
+          _HomeTab(refreshKey: _homeRefreshKey),
+          const FlashcardStudyScreen(),
+          const LibraryScreen(),
+          const GroupsScreen(),
+          const ProfileScreen(),
+        ],
+      ),
       bottomNavigationBar: _BottomNav(
         currentIndex: _navIndex,
-        onTap: (i) => setState(() => _navIndex = i),
+        onTap: _onTabTap,
+        groupsBadge: _groupsBadge,
       ),
     );
   }
 }
 
 class _HomeTab extends StatelessWidget {
-  const _HomeTab();
+  const _HomeTab({this.refreshKey = 0});
+  final int refreshKey;
 
   @override
   Widget build(BuildContext context) {
-    return const SafeArea(
+    return SafeArea(
       bottom: false,
       child: Column(
         children: [
-          _Header(),
+          const _Header(),
           Expanded(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _StatRow(),
-                  SizedBox(height: 20),
-                  _ResumeCard(),
-                  SizedBox(height: 28),
-                  _SectionLabel('Your collections'),
-                  SizedBox(height: 12),
-                  _CollectionList(),
+                  const _StatRow(),
+                  const SizedBox(height: 20),
+                  const _ResumeCard(),
+                  const SizedBox(height: 28),
+                  const _SectionLabel('Your collections'),
+                  const SizedBox(height: 12),
+                  _CollectionList(refreshKey: refreshKey),
                 ],
               ),
             ),
@@ -282,27 +312,61 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _CollectionList extends StatelessWidget {
-  const _CollectionList();
+class _CollectionList extends StatefulWidget {
+  const _CollectionList({this.refreshKey = 0});
+  final int refreshKey;
 
-  static const _collections = [
-    (name: 'TOPIK Basics', decks: 4, color: AppColors.periwinkle),
-    (name: 'Food & Drink', decks: 2, color: AppColors.bubblegum),
-    (name: 'K-drama phrases', decks: 3, color: AppColors.sunnyYellow),
-    (name: 'Numbers & Time', decks: 2, color: AppColors.forestGreen),
-  ];
+  @override
+  State<_CollectionList> createState() => _CollectionListState();
+}
+
+class _CollectionListState extends State<_CollectionList> {
+  List<Collection> _collections = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_CollectionList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshKey != widget.refreshKey) _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final collections = await CollectionService.instance.listCollections();
+      if (mounted) setState(() { _collections = collections; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: CircularProgressIndicator(color: AppColors.periwinkle),
+        ),
+      );
+    }
+    if (_collections.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text('No collections yet',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.ash)),
+      );
+    }
     return Column(
       children: _collections
           .map((c) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _CollectionTile(
-                  name: c.name,
-                  deckCount: c.decks,
-                  accentColor: c.color,
-                ),
+                child: _CollectionTile(collection: c),
               ))
           .toList(),
     );
@@ -310,15 +374,9 @@ class _CollectionList extends StatelessWidget {
 }
 
 class _CollectionTile extends StatelessWidget {
-  const _CollectionTile({
-    required this.name,
-    required this.deckCount,
-    required this.accentColor,
-  });
+  const _CollectionTile({required this.collection});
 
-  final String name;
-  final int deckCount;
-  final Color accentColor;
+  final Collection collection;
 
   @override
   Widget build(BuildContext context) {
@@ -326,77 +384,107 @@ class _CollectionTile extends StatelessWidget {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => DeckDetailScreen(deckId: 'deck-1', accentColor: accentColor),
+          builder: (_) => CollectionDetailScreen(
+            collectionId: collection.id,
+            collectionName: collection.name,
+            accentColor: collection.color,
+          ),
         ),
       ),
       child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadius.cardBorderRadius,
-        border: Border(
-          left: BorderSide(color: accentColor, width: 4),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.ink.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 2),
-                Text(
-                  '$deckCount decks',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: AppRadius.cardBorderRadius,
+          border: Border(left: BorderSide(color: collection.color, width: 4)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.ink.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-          ),
-          Icon(Icons.chevron_right, color: AppColors.fog),
-        ],
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(collection.name, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 2),
+                  Text('${collection.deckCount} decks',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.fog),
+          ],
+        ),
       ),
-    ));
+    );
   }
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.currentIndex, required this.onTap});
+  const _BottomNav({
+    required this.currentIndex,
+    required this.onTap,
+    this.groupsBadge = 0,
+  });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final int groupsBadge;
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      (icon: Icons.home_rounded, label: 'Home'),
-      (icon: Icons.school_rounded, label: 'Learn'),
-      (icon: Icons.library_books_rounded, label: 'Library'),
-      (icon: Icons.person_rounded, label: 'Profile'),
+    // Tab indices: 0=Home, 1=Learn, 2=Library, 3=Groups, 4=Profile
+    const tabs = [
+      (icon: Icons.home_rounded, label: 'Home', activeColor: AppColors.periwinkle),
+      (icon: Icons.school_rounded, label: 'Learn', activeColor: AppColors.periwinkle),
+      (icon: Icons.library_books_rounded, label: 'Library', activeColor: AppColors.periwinkle),
+      (icon: Icons.group_rounded, label: 'Groups', activeColor: AppColors.bubblegum),
+      (icon: Icons.person_rounded, label: 'Profile', activeColor: AppColors.sunnyYellow),
     ];
 
     return BottomNavigationBar(
       currentIndex: currentIndex,
       onTap: onTap,
-      selectedItemColor: AppColors.periwinkle,
+      selectedItemColor: tabs[currentIndex].activeColor,
       unselectedItemColor: AppColors.fog,
       backgroundColor: Colors.white,
       type: BottomNavigationBarType.fixed,
-      selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-      items: items
-          .map((i) => BottomNavigationBarItem(
-                icon: Icon(i.icon),
-                label: i.label,
-              ))
-          .toList(),
+      selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+      unselectedLabelStyle: const TextStyle(fontSize: 11),
+      items: tabs.asMap().entries.map((e) {
+        final i = e.key;
+        final tab = e.value;
+        Widget icon = Icon(tab.icon, size: 22);
+        if (i == 3 && groupsBadge > 0) {
+          icon = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(tab.icon, size: 22),
+              Positioned(
+                top: -4,
+                right: -6,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(
+                      color: AppColors.orange, shape: BoxShape.circle),
+                  child: Text('$groupsBadge',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          );
+        }
+        return BottomNavigationBarItem(icon: icon, label: tab.label);
+      }).toList(),
     );
   }
 }

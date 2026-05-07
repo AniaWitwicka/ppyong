@@ -156,3 +156,12 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, users)
 }
+
+func (h *UserHandler) GetMyWeakCards(w http.ResponseWriter, r *http.Request) {
+	cards, err := h.repo.GetWeakCards(r.Context(), userIDFromContext(r))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load weak cards")
+		return
+	}
+	writeJSON(w, http.StatusOK, cards)
+}

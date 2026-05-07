@@ -4,69 +4,41 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/yourname/koreanapp-backend/internal/model"
+	"github.com/yourname/koreanapp-backend/internal/repository"
 )
 
-var mockCollections = []model.CollectionSummary{
-	{
-		ID:        "col-1",
-		Name:      "TOPIK Basics",
-		Emoji:     "📚",
-		Color:     "#99B7F5",
-		DeckCount: 4,
-		WordCount: 48,
-		DueCount:  12,
-		Progress:  0.45,
-	},
-	{
-		ID:        "col-2",
-		Name:      "Food & Drink",
-		Emoji:     "🍜",
-		Color:     "#F296BD",
-		DeckCount: 2,
-		WordCount: 24,
-		DueCount:  3,
-		Progress:  0.7,
-	},
-	{
-		ID:        "col-3",
-		Name:      "K-drama phrases",
-		Emoji:     "💬",
-		Color:     "#FCCA59",
-		DeckCount: 3,
-		WordCount: 36,
-		DueCount:  0,
-		Progress:  1.0,
-	},
-	{
-		ID:        "col-4",
-		Name:      "Numbers & Time",
-		Emoji:     "🕐",
-		Color:     "#267F53",
-		DeckCount: 2,
-		WordCount: 20,
-		DueCount:  5,
-		Progress:  0.2,
-	},
+type CollectionHandler struct {
+	repo *repository.CollectionRepository
 }
 
-func ListCollections(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, mockCollections)
+func NewCollectionHandler(repo *repository.CollectionRepository) *CollectionHandler {
+	return &CollectionHandler{repo: repo}
 }
 
-func GetCollection(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	for _, c := range mockCollections {
-		if c.ID == id {
-			writeJSON(w, http.StatusOK, c)
-			return
-		}
+func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
+	collections, err := h.repo.List(r.Context(), userIDFromContext(r))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load collections")
+		return
 	}
-	writeError(w, http.StatusNotFound, "collection not found")
+	writeJSON(w, http.StatusOK, collections)
 }
 
-func CreateCollection(w http.ResponseWriter, r *http.Request) {
-	var req model.CreateCollectionRequest
+func (h *CollectionHandler) Get(w http.ResponseWriter, r *http.Request) {
+	c, err := h.repo.GetByID(r.Context(), r.PathValue("id"), userIDFromContext(r))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "collection not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
+}
+
+func (h *CollectionHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name  string `json:"name"`
+		Emoji string `json:"emoji"`
+		Color string `json:"color"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -75,58 +47,58 @@ func CreateCollection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-
-	created := model.CollectionSummary{
-		ID:        "col-new",
-		Name:      req.Name,
-		Emoji:     req.Emoji,
-		Color:     req.Color,
-		DeckCount: 0,
-		WordCount: 0,
-		DueCount:  0,
-		Progress:  0,
+	if req.Emoji == "" {
+		req.Emoji = "📚"
 	}
-	writeJSON(w, http.StatusCreated, created)
-}
-
-func UpdateCollection(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var col *model.CollectionSummary
-	for i := range mockCollections {
-		if mockCollections[i].ID == id {
-			col = &mockCollections[i]
-			break
-		}
+	if req.Color == "" {
+		req.Color = "#99B7F5"
 	}
-	if col == nil {
-		writeError(w, http.StatusNotFound, "collection not found")
+	c, err := h.repo.Create(r.Context(), userIDFromContext(r), req.Name, req.Emoji, req.Color)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create collection")
 		return
 	}
+	writeJSON(w, http.StatusCreated, c)
+}
 
-	var req model.UpdateCollectionRequest
+func (h *CollectionHandler) Update(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name  *string `json:"name"`
+		Emoji *string `json:"emoji"`
+		Color *string `json:"color"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.Name != nil {
-		col.Name = *req.Name
+	c, err := h.repo.Update(r.Context(), r.PathValue("id"), req.Name, req.Emoji, req.Color)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update collection")
+		return
 	}
-	if req.Emoji != nil {
-		col.Emoji = *req.Emoji
-	}
-	if req.Color != nil {
-		col.Color = *req.Color
-	}
-	writeJSON(w, http.StatusOK, col)
+	writeJSON(w, http.StatusOK, c)
 }
 
-func DeleteCollection(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	for _, c := range mockCollections {
-		if c.ID == id {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+func (h *CollectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if err := h.repo.Delete(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete collection")
+		return
 	}
-	writeError(w, http.StatusNotFound, "collection not found")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CollectionHandler) Share(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		MemberIDs []string `json:"member_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	shared, err := h.repo.Share(r.Context(), r.PathValue("id"), req.MemberIDs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to share collection")
+		return
+	}
+	writeJSON(w, http.StatusOK, shared)
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../models/card.dart';
 import '../models/deck.dart';
+import '../services/card_service.dart';
 import '../services/deck_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
@@ -7,28 +9,6 @@ import '../widgets/edit_deck_sheet.dart';
 import '../widgets/add_flashcard_sheet.dart';
 import '../widgets/deck_share_dialog.dart';
 import 'flashcard_study_screen.dart';
-
-// Cards are still mocked until GET /decks/:id/cards is implemented.
-enum _CardStatus { mastered, learning, newCard }
-
-typedef _CardData = ({
-  String korean,
-  String romanisation,
-  String translation,
-  String notes,
-  _CardStatus status,
-});
-
-const _mockCards = <_CardData>[
-  (korean: '안녕하세요', romanisation: 'annyeonghaseyo', translation: 'Hello', notes: 'Formal greeting, used most of the time', status: _CardStatus.mastered),
-  (korean: '감사합니다', romanisation: 'gamsahamnida', translation: 'Thank you', notes: 'Formal. Casual: 고마워요', status: _CardStatus.mastered),
-  (korean: '괜찮아요', romanisation: 'gwaenchanayo', translation: "It's okay", notes: '', status: _CardStatus.learning),
-  (korean: '죄송합니다', romanisation: 'joesonghamnida', translation: "I'm sorry", notes: 'More formal than 미안해요', status: _CardStatus.learning),
-  (korean: '안녕히 계세요', romanisation: 'annyeonghi gyeseyo', translation: 'Goodbye', notes: 'Said to one who stays behind', status: _CardStatus.learning),
-  (korean: '반갑습니다', romanisation: 'bangapseumnida', translation: 'Nice to meet you', notes: '', status: _CardStatus.newCard),
-  (korean: '어디예요?', romanisation: 'eodiyeyo?', translation: 'Where is it?', notes: '', status: _CardStatus.newCard),
-  (korean: '얼마예요?', romanisation: 'eolmayeyo?', translation: 'How much is it?', notes: '', status: _CardStatus.newCard),
-];
 
 class DeckDetailScreen extends StatefulWidget {
   const DeckDetailScreen({
@@ -46,6 +26,7 @@ class DeckDetailScreen extends StatefulWidget {
 
 class _DeckDetailScreenState extends State<DeckDetailScreen> {
   DeckDetail? _deck;
+  List<CardModel> _cards = [];
   bool _loading = true;
   bool _hasError = false;
 
@@ -58,14 +39,19 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
   Future<void> _load() async {
     setState(() { _loading = true; _hasError = false; });
     try {
-      final deck = await DeckService.instance.getDeck(widget.deckId);
-      setState(() { _deck = deck; _loading = false; });
+      final results = await Future.wait([
+        DeckService.instance.getDeck(widget.deckId),
+        CardService.instance.listCards(widget.deckId),
+      ]);
+      setState(() {
+        _deck = results[0] as DeckDetail;
+        _cards = results[1] as List<CardModel>;
+        _loading = false;
+      });
     } catch (_) {
       setState(() { _loading = false; _hasError = true; });
       if (mounted) {
-        showAppToast(context,
-            variant: ToastVariant.error,
-            title: 'Failed to load deck');
+        showAppToast(context, variant: ToastVariant.error, title: 'Failed to load deck');
       }
     }
   }
@@ -112,8 +98,11 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showAddFlashcardSheet(context,
-            deckName: deck.name, cardCount: deck.cardCount),
+        onPressed: () async {
+          await showAddFlashcardSheet(context,
+              deckId: widget.deckId, deckName: deck.name, cardCount: _cards.length);
+          _load();
+        },
         backgroundColor: AppColors.orange,
         elevation: 4,
         child: const Icon(Icons.add, color: Colors.white, size: 28),
@@ -124,6 +113,7 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
             _TopBar(
               collectionName: deck.collectionName,
               accentColor: widget.accentColor,
+              deckId: widget.deckId,
               deckName: deck.name,
             ),
             Expanded(
@@ -135,10 +125,11 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
                     learning: deck.learningCount,
                     newCards: deck.newCount,
                     accentColor: widget.accentColor,
+                    cards: _cards,
                   ),
                   const Divider(color: AppColors.border, height: 1),
                   _CardsHeader(),
-                  ..._mockCards.map((c) => _ExpandableCardRow(card: c)),
+                  ..._cards.map((c) => _ExpandableCardRow(card: c)),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -153,10 +144,11 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
 // ── Top bar ───────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.collectionName, required this.accentColor, required this.deckName});
+  const _TopBar({required this.collectionName, required this.accentColor, required this.deckId, required this.deckName});
 
   final String collectionName;
   final Color accentColor;
+  final String deckId;
   final String deckName;
 
   @override
@@ -197,7 +189,7 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: () => showDeckShareDialog(context, deckName: deckName),
+            onTap: () => showDeckShareDialog(context, deckId: deckId, deckName: deckName),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: const BoxDecoration(
@@ -255,6 +247,7 @@ class _HeroSection extends StatelessWidget {
     required this.learning,
     required this.newCards,
     required this.accentColor,
+    required this.cards,
   });
 
   final String deckName;
@@ -262,6 +255,7 @@ class _HeroSection extends StatelessWidget {
   final int learning;
   final int newCards;
   final Color accentColor;
+  final List<CardModel> cards;
 
   int get total => mastered + learning + newCards;
 
@@ -288,7 +282,7 @@ class _HeroSection extends StatelessWidget {
           const SizedBox(height: 12),
           _SrsChips(mastered: mastered, learning: learning, newCards: newCards),
           const SizedBox(height: 16),
-          _ActionButtons(deckName: deckName, accentColor: accentColor),
+          _ActionButtons(deckName: deckName, accentColor: accentColor, cards: cards),
         ],
       ),
     );
@@ -448,9 +442,10 @@ class _Chip extends StatelessWidget {
 }
 
 class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({required this.deckName, required this.accentColor});
+  const _ActionButtons({required this.deckName, required this.accentColor, required this.cards});
   final String deckName;
   final Color accentColor;
+  final List<CardModel> cards;
 
   @override
   Widget build(BuildContext context) {
@@ -475,7 +470,7 @@ class _ActionButtons extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: GestureDetector(
-            onTap: () => _showPreview(context),
+            onTap: () => _showPreview(context, cards),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
@@ -494,12 +489,12 @@ class _ActionButtons extends StatelessWidget {
     );
   }
 
-  void _showPreview(BuildContext context) {
+  void _showPreview(BuildContext context, List<CardModel> cards) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _PreviewSheet(deckTitle: deckName),
+      builder: (_) => _PreviewSheet(deckTitle: deckName, cards: cards),
     );
   }
 }
@@ -537,7 +532,7 @@ class _CardsHeader extends StatelessWidget {
 
 class _ExpandableCardRow extends StatefulWidget {
   const _ExpandableCardRow({required this.card});
-  final _CardData card;
+  final CardModel card;
 
   @override
   State<_ExpandableCardRow> createState() => _ExpandableCardRowState();
@@ -547,9 +542,9 @@ class _ExpandableCardRowState extends State<_ExpandableCardRow> {
   bool _expanded = false;
 
   Color get _statusColor => switch (widget.card.status) {
-        _CardStatus.mastered => AppColors.forestGreen,
-        _CardStatus.learning => AppColors.periwinkle,
-        _CardStatus.newCard  => AppColors.fog,
+        CardStatus.mastered => AppColors.forestGreen,
+        CardStatus.learning => AppColors.periwinkle,
+        CardStatus.newCard  => AppColors.fog,
       };
 
   @override
@@ -636,8 +631,9 @@ class _ExpandableCardRowState extends State<_ExpandableCardRow> {
 // ── Preview sheet ─────────────────────────────────────────────────────────
 
 class _PreviewSheet extends StatelessWidget {
-  const _PreviewSheet({required this.deckTitle});
+  const _PreviewSheet({required this.deckTitle, required this.cards});
   final String deckTitle;
+  final List<CardModel> cards;
 
   @override
   Widget build(BuildContext context) {
@@ -675,10 +671,10 @@ class _PreviewSheet extends StatelessWidget {
             Expanded(
               child: ListView.separated(
                 controller: controller,
-                itemCount: _mockCards.length,
+                itemCount: cards.length,
                 separatorBuilder: (_, __) => const Divider(color: AppColors.border, height: 1),
                 itemBuilder: (context, i) {
-                  final c = _mockCards[i];
+                  final c = cards[i];
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     child: Row(

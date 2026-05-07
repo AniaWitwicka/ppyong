@@ -65,10 +65,10 @@ Needed by: **Library screen**, **Home screen**, **Add collection sheet**
 - [x] `GET /collections/:id` — single collection detail
 - [x] `PATCH /collections/:id` — rename, change emoji/color/description
 - [x] `DELETE /collections/:id`
-- [ ] Connect all of the above to real DB queries (currently mocked)
-  - [ ] `backend/internal/repository/collection_repository.go` — List, GetByID, Create, Update, Delete
-  - [ ] SQL migration: `collections` table (id, name, emoji, color, created_by, created_at)
-  - [ ] deck_count, word_count, due_count, progress computed via JOIN/aggregate queries
+- [x] Connect all of the above to real DB queries
+  - [x] `backend/internal/repository/collection_repository.go` — List, GetByID, Create, Update, Delete
+  - [x] SQL migration: `collections` table (id, name, emoji, color, created_by, created_at) — migration 003
+  - [x] deck_count, word_count, due_count, progress computed via JOIN/aggregate queries
 
 ---
 
@@ -82,10 +82,10 @@ Needed by: **Deck detail screen**, **Library screen**, **Edit deck sheet**, **Fl
 - [x] `PATCH /decks/:id` — rename, change description or collection
 - [x] `DELETE /decks/:id`
 - [x] `POST /decks/:id/share` — body: `{ member_ids: [string] }` → grant Viewer access; returns list of newly shared members
-- [ ] Connect all of the above to real DB queries (currently mocked)
-  - [ ] `backend/internal/repository/deck_repository.go` — List, GetByID, Create, Update, Delete, Share
-  - [ ] SQL migration: `decks` table (id, collection_id, name, description, created_by, created_at)
-  - [ ] mastered/learning/new counts computed via JOIN with srs_progress
+- [x] Connect all of the above to real DB queries
+  - [x] `backend/internal/repository/deck_repository.go` — List, GetByID, Create, Update, Delete, Share
+  - [x] SQL migration: `decks` table already in migration 001
+  - [x] mastered/learning/new counts computed via JOIN with srs_progress
 
 
 ---
@@ -94,12 +94,15 @@ Needed by: **Deck detail screen**, **Library screen**, **Edit deck sheet**, **Fl
 
 Needed by: **Deck detail screen**, **Flashcard study screen**, **Add flashcard sheet**
 
-- [ ] `GET /decks/:id/cards` — all cards in deck; each returns: id, korean, romanisation, translation, notes, status (mastered | learning | new), due_date
-- [ ] `GET /decks/:id/cards?scope=due` — cards where due_date ≤ today (for "Due today (N)" scope picker)
-- [ ] `GET /decks/:id/cards?scope=weak` — cards with low ease_factor (for "Weak words (N)" scope picker)
-- [ ] `POST /decks/:id/cards` — create card: korean, romanisation, translation, notes
-- [ ] `PATCH /cards/:id` — edit card fields
-- [ ] `DELETE /cards/:id`
+- [x] `GET /decks/:id/cards` — all cards in deck; each returns: id, korean, romanisation, translation, notes, status (mastered | learning | new), due_date
+- [x] `GET /decks/:id/cards?scope=due` — cards where due_date ≤ today
+- [x] `GET /decks/:id/cards?scope=weak` — cards with low ease_factor
+- [x] `POST /decks/:id/cards` — create card: korean, romanisation, translation, notes
+- [x] `PATCH /cards/:id` — edit card fields
+- [x] `DELETE /cards/:id`
+- [x] `backend/internal/repository/card_repository.go` — List (with scope), Create, Update, Delete
+- [x] Connected to Flutter: `lib/models/card.dart`, `lib/services/card_service.dart`
+- [x] Deck detail screen loads real cards; Add flashcard sheet saves to API
 
 ---
 
@@ -117,7 +120,50 @@ Needed by: **Flashcard study screen** (every swipe), **Deck detail screen** (sta
   - `mastered` — interval ≥ 7 days
 - [ ] Seed initial srs_progress rows when a card is first studied
 
-## 8. PWA / backend deploy
+## 8. Groups & social
+
+Needed by: **Groups tab** (all views), **Group detail screen**
+
+### DB migrations
+- [x] Migration: `groups` table — id, name, emoji, color, created_by (user_id FK), created_at
+- [x] Migration: `group_members` table — group_id, user_id, role (`owner` | `member`), joined_at
+- [x] Migration: `invites` table — id, group_id, inviter_id, invitee_email, invitee_user_id (nullable), status (`pending` | `accepted` | `declined`), expires_at (7 days from created_at)
+- [x] Migration: `friends` table — id, user_id, friend_id, status (`pending` | `accepted`), created_at
+
+### Groups endpoints
+- [x] `GET /groups` — list groups the authenticated user belongs to; each returns: id, name, emoji, color, member_count, deck_count, last_active, member avatars (up to 4)
+- [x] `POST /groups` — create group: name, emoji; creator becomes `owner`
+- [x] `GET /groups/:id` — group detail: name, emoji, color, members list (id, name, initials, role, progress %), shared decks list
+- [x] `PATCH /groups/:id` — update name or emoji; owner only
+- [x] `DELETE /groups/:id` — owner only; cascades to group_members + invites
+- [x] `POST /groups/:id/leave` — remove self from group_members; owner cannot leave (must delete or transfer)
+- [x] `backend/internal/repository/group_repository.go` — List, GetByID, Create, Update, Delete, Leave, IsMember, IsOwner
+- [x] `backend/internal/handler/groups.go` — GroupHandler struct
+
+### Invites endpoints
+- [x] `GET /invites` — list incoming invites (status=pending, invitee is me) + sent invites (inviter is me)
+- [x] `POST /groups/:id/invite` — body: `{ email: string }` — creates invite row, sends email (stub for now); returns invite object
+- [x] `POST /invites/:id/accept` — sets status=accepted, adds user to group_members; invitee only
+- [x] `POST /invites/:id/decline` — sets status=declined; invitee only
+- [x] `GET /invites/pending-count` — returns `{ count: int }` — used for badge on Groups tab
+- [x] `backend/internal/repository/invite_repository.go` — List, Create, Accept, Decline, PendingCount
+- [x] `backend/internal/handler/invites.go` — InviteHandler struct
+
+### Friends endpoints
+- [x] `GET /friends` — list accepted friends with name, initials, streak, word count, due count, role
+- [x] `GET /users/search?q=` — search users by name or email (used in Add friend sheet); excludes existing friends and self
+- [x] `POST /friends/request` — body: `{ user_id: string }` — sends friend request
+- [x] `POST /friends/:id/accept` — accept incoming friend request
+- [x] `POST /friends/:id/decline` — decline incoming friend request
+- [x] `backend/internal/repository/friend_repository.go` — List, Search, SendRequest, Accept, Decline
+- [x] `backend/internal/handler/friends.go` — FriendHandler struct
+
+### Wire into main.go
+- [x] Register group, invite, friend routes in `cmd/api/main.go`
+
+---
+
+## 9. PWA / backend deploy
 
 - [ ] Railway deploy config (`Dockerfile` or `railway.json`)
 - [ ] Environment variables set on Railway (`DATABASE_URL`, `JWT_SECRET`, `ALLOWED_ORIGINS`)

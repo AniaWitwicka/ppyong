@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/deck.dart';
 import '../services/deck_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bottom_sheet.dart';
+import '../widgets/app_input.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/deck_share_dialog.dart';
 import 'deck_detail_screen.dart';
 
 class CollectionDetailScreen extends StatefulWidget {
@@ -32,6 +35,29 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
     _load();
   }
 
+  Future<void> _showAddDeckSheet() async {
+    final nameCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final added = await showAppBottomSheet<bool>(
+      context: context,
+      child: _AddDeckSheet(nameCtrl: nameCtrl, descCtrl: descCtrl),
+    );
+    final name = nameCtrl.text.trim();
+    final desc = descCtrl.text.trim();
+    nameCtrl.dispose();
+    descCtrl.dispose();
+    if (added != true || name.isEmpty) return;
+    try {
+      await DeckService.instance.createDeck(widget.collectionId, name: name, description: desc);
+      if (mounted) {
+        showAppToast(context, variant: ToastVariant.success, title: 'Deck created');
+        _load();
+      }
+    } catch (_) {
+      if (mounted) showAppToast(context, variant: ToastVariant.error, title: 'Failed to create deck');
+    }
+  }
+
   Future<void> _load() async {
     setState(() { _loading = true; _hasError = false; });
     try {
@@ -52,10 +78,17 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddDeckSheet,
+        backgroundColor: AppColors.orange,
+        elevation: 4,
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
       body: SafeArea(
         child: Column(
           children: [
             _Header(
+              collectionId: widget.collectionId,
               collectionName: widget.collectionName,
               accentColor: widget.accentColor,
             ),
@@ -142,7 +175,8 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
 // ── Header ────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
-  const _Header({required this.collectionName, required this.accentColor});
+  const _Header({required this.collectionId, required this.collectionName, required this.accentColor});
+  final String collectionId;
   final String collectionName;
   final Color accentColor;
 
@@ -176,6 +210,29 @@ class _Header extends StatelessWidget {
                   ),
             ),
           ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => showCollectionShareDialog(
+              context,
+              collectionId: collectionId,
+              collectionName: collectionName,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.share_outlined, size: 14, color: Colors.white),
+                  SizedBox(width: 5),
+                  Text('Share', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -189,6 +246,8 @@ class _DeckRow extends StatelessWidget {
   final DeckSummary deck;
   final Color accentColor;
   final VoidCallback onTap;
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -221,6 +280,30 @@ class _DeckRow extends StatelessWidget {
                         ),
                   ),
                 ),
+                GestureDetector(
+                  onTap: () => showDeckShareDialog(context, deckId: deck.id, deckName: deck.name),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEEF3FE),
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.share_outlined, size: 13, color: AppColors.periwinkle),
+                        const SizedBox(width: 4),
+                        Text('Share',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: AppColors.ink,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                )),
+                      ],
+                    ),
+                  ),
+                ),
                 const Icon(Icons.chevron_right_rounded, color: AppColors.fog, size: 20),
               ],
             ),
@@ -251,6 +334,63 @@ class _DeckRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Add deck sheet ────────────────────────────────────────────────────────
+
+class _AddDeckSheet extends StatelessWidget {
+  const _AddDeckSheet({required this.nameCtrl, required this.descCtrl});
+  final TextEditingController nameCtrl;
+  final TextEditingController descCtrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('New deck', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 16),
+        AppInput(hint: 'Deck name', controller: nameCtrl, autofocus: true),
+        const SizedBox(height: 10),
+        AppInput(hint: 'Description (optional)', controller: descCtrl),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context, false),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: AppRadius.pill,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('Cancel',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.ash)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context, true),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: const BoxDecoration(color: AppColors.orange, borderRadius: AppRadius.pill),
+                  alignment: Alignment.center,
+                  child: Text('Create deck',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

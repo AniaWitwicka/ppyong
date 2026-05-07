@@ -47,4 +47,8 @@ class CollectionService {
   Future<void> deleteCollection(String id) async {
     await _api.delete('/collections/$id');
   }
+
+  Future<void> shareCollection(String id, List<String> memberIds) async {
+    await _api.post('/collections/$id/share', {'member_ids': memberIds});
+  }
 }

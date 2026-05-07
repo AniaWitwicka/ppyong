@@ -1,4 +1,5 @@
 import '../models/user.dart';
+import '../models/weak_card.dart';
 import 'api_service.dart';
 
 class UserService {
@@ -28,6 +29,16 @@ class UserService {
       if (email != null) 'email': email,
     });
     return UserProfile.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<List<WeakCard>> getWeakCards() async {
+    final data = await _api.get('/me/weak-words');
+    return (data as List).map((e) => WeakCard.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<UserSummary>> listUsers() async {
+    final data = await _api.get('/users');
+    return (data as List).map((e) => UserSummary.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<UserSettings> updateSettings({

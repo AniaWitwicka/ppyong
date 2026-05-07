@@ -7,27 +7,33 @@ class AppInput extends StatelessWidget {
     this.hint,
     this.controller,
     this.onChanged,
+    this.onSubmitted,
     this.prefixIcon,
     this.autofocus = false,
     this.filled = true,
     this.keyboardType,
+    this.textInputAction,
   });
 
   final String? hint;
   final TextEditingController? controller;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
   final Widget? prefixIcon;
   final bool autofocus;
   final bool filled;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
       autofocus: autofocus,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: AppColors.ink,
             fontWeight: FontWeight.w600,

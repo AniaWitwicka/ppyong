@@ -486,3 +486,154 @@ Use `fluttertoast` or `awesome_snackbar_content` package, or build a custom over
 - **Deleted card** → Success: "Card removed" (with optional undo action)
 - **Streak warning** → Warning: "Study today to keep your X day streak"
 - **Network offline** → Error: "No connection. Changes will sync when you're back online."
+
+---
+
+## 13. Groups tab
+
+### Overview
+A dedicated 5th tab in the bottom nav — the social hub of the app. Houses group management, friend list, and invites. Uses bubblegum pink `#F296BD` as its identity color.
+
+### Updated bottom nav
+```
+Home · Learn · Library · Groups · Profile
+```
+- Groups icon: two overlapping people circles, filled `#F296BD` when active
+- Badge: orange circle with white count number, top-right of icon — shows pending invite count
+- Active label color: `#C45A8A`
+
+### Tab structure
+Three views inside the Groups tab, switched via a segmented control in the header:
+```
+My groups | Friends | Invites (badge)
+```
+- Segmented control sits inside the pink header band
+- Active segment: white pill, ink text, subtle shadow
+- Inactive: transparent, fog text
+- Invites segment shows pending count badge when > 0
+
+---
+
+### 13a. My groups view
+
+#### Layout
+- **Header band** — bubblegum pink `#F296BD`
+  - Title "Groups" (24px, 800)
+  - Segmented control below
+- **Group cards** — white bg, colored border (2px), emoji icon (46px rounded square), name + member/deck count, overlapping member avatars (28px, -8px overlap), last active timestamp
+- **Create group card** — dashed pink border `#F296BD`, pink bg tint `#FEF0F6`, + icon circle, "Create a new group" label
+- **FAB** — orange, bottom-right, opens create group sheet
+
+#### Group card colors
+Each group gets one of the 5 palette colors as its identity (same as collections).
+
+---
+
+### 13b. Friends view
+
+#### Layout
+- Search bar at top (`#F0EDE8` bg, rounded 12px)
+- **Friend rows** — white bg, `#E8E4DE` border, 38px avatar, name + group membership label, stat badge on right
+  - Stat badge examples: "7 day streak 🔥" (green), "34 words" (periwinkle), "12 words due" (pink)
+  - Teacher friends show yellow "Teacher" badge
+- **"Add a friend" row** — orange border `#F5793B`, orange bg tint, orange + icon, orange text — always pinned at bottom of list
+
+---
+
+### 13c. Invites view
+
+#### Layout
+Two sections with uppercase fog labels: "Incoming" and "Sent"
+
+**Incoming invite row:**
+- Sender avatar + "X invited you to" + group name (colored) + member/deck count
+- Two buttons stacked right: "Accept" (green filled) + "Decline" (ghost)
+- Row border: `#267F53`, bg: `#F0FBF5`
+
+**Sent invite row:**
+- Gray avatar (?) for unregistered invitee, email address, "Invited to [group]" label
+- "Pending" badge: yellow tint bg, dark yellow text
+- Row opacity: 70%
+
+**Info chip** at bottom: periwinkle tint, "Invites expire after 7 days"
+
+---
+
+### 13d. Create group — bottom sheet
+
+#### Trigger
+FAB on My groups view, or dashed "Create a new group" card
+
+#### Content
+- Title "New group"
+- Group name input
+- Emoji picker row (🇰🇷 📚 ✏️ 🎯 💬) — selected gets colored bg
+- "Create group" orange button + "Cancel" ghost button
+
+---
+
+### 13e. Add friend — bottom sheet
+
+#### Trigger
+"Add a friend" row in Friends view
+
+#### Content
+- Title "Add a friend"
+- Segmented control: "Search name" | "Invite by email"
+
+**Search name tab:**
+- Search input (`#F0EDE8` bg)
+- "Type to search Ppyong users" hint when empty
+- Results appear below as friend rows (tap to send friend request)
+
+**Invite by email tab:**
+- Email input field
+- "Invite to group" dropdown — shows current group with emoji + name, periwinkle border when selected
+- "Send invite" orange button
+
+---
+
+## 14. Group detail screen
+
+### Trigger
+Tapping a group card in My groups view
+
+### Layout
+- **Header band** — bubblegum pink `#F296BD`
+  - Back button (semi-transparent white square)
+  - Emoji + group name (18px, 800) + member/deck count
+  - Three-dot menu button (semi-transparent circle) — edit group, leave group
+  - **Member avatars row** — horizontal scroll
+    - Each member: 44px avatar circle + name label below
+    - Last item: dashed white circle with + icon + "Invite" label — opens add friend sheet
+
+### Body sections
+
+**Group progress card** — white bg, `#E8E4DE` border
+- Title "Group progress"
+- One row per member: avatar (20px) + name + progress bar (100px wide) + percentage
+- Bar colors vary per member for easy visual distinction
+
+**Shared decks section**
+- "SHARED DECKS" uppercase fog label
+- Deck cards: colored border + emoji icon (36px rounded square) + deck name + card count + who added it
+- Right side: "Study" button (filled, matching deck color)
+
+### Bottom nav
+Groups tab active (`#F296BD`)
+
+---
+
+## Navigation update — 5 tab bottom nav
+
+The bottom nav now has 5 tabs. Icon sizes reduced slightly to 20px to fit:
+
+| Tab | Icon | Active color | Label color |
+|-----|------|-------------|-------------|
+| Home | House | `#99B7F5` filled | `#1A3A7A` |
+| Learn | Grid 2×2 | `#99B7F5` filled | `#1A3A7A` |
+| Library | Grid asymmetric | `#99B7F5` filled | `#1A3A7A` |
+| Groups | Two people | `#F296BD` filled | `#C45A8A` |
+| Profile | Person circle | `#FCCA59` filled | `#7A5500` |
+
+Badge: orange `#F5793B` circle, white text, positioned top-right of icon — used on Groups tab for pending invites.

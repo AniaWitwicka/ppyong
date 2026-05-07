@@ -132,6 +132,48 @@ func (r *UserRepository) UpdateSettings(ctx context.Context, id string, notif *b
 	return &s, nil
 }
 
+func (r *UserRepository) GetWeakCards(ctx context.Context, userID string) ([]model.WeakCard, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			ca.id,
+			ca.korean,
+			COALESCE(ca.romanisation, '') AS romanisation,
+			ca.translation,
+			COALESCE(ca.notes, '') AS notes,
+			d.id AS deck_id,
+			d.title AS deck_name,
+			c.title AS collection_name,
+			sp.ease_factor,
+			sp.interval_days
+		FROM srs_progress sp
+		JOIN cards ca ON ca.id = sp.card_id
+		JOIN decks d ON d.id = ca.deck_id
+		JOIN collections c ON c.id = d.collection_id
+		WHERE sp.user_id = $1
+		  AND sp.repetitions > 0
+		  AND (sp.ease_factor < 2.0 OR sp.interval_days < 7)
+		ORDER BY sp.ease_factor ASC, sp.due_date ASC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cards []model.WeakCard
+	for rows.Next() {
+		var w model.WeakCard
+		if err := rows.Scan(&w.ID, &w.Korean, &w.Romanisation, &w.Translation, &w.Notes,
+			&w.DeckID, &w.DeckName, &w.CollectionName, &w.EaseFactor, &w.IntervalDays); err != nil {
+			return nil, err
+		}
+		cards = append(cards, w)
+	}
+	if cards == nil {
+		cards = []model.WeakCard{}
+	}
+	return cards, nil
+}
+
 func (r *UserRepository) List(ctx context.Context) ([]model.UserSummary, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, name, initials, role FROM users ORDER BY name

@@ -24,8 +24,14 @@ func main() {
 	defer pool.Close()
 	log.Println("database connected")
 
-	userHandler := handler.NewUserHandler(repository.NewUserRepository(pool))
-	authHandler := handler.NewAuthHandler(repository.NewAuthRepository(pool))
+	userHandler       := handler.NewUserHandler(repository.NewUserRepository(pool))
+	authHandler       := handler.NewAuthHandler(repository.NewAuthRepository(pool))
+	collectionHandler := handler.NewCollectionHandler(repository.NewCollectionRepository(pool))
+	deckHandler       := handler.NewDeckHandler(repository.NewDeckRepository(pool))
+	cardHandler       := handler.NewCardHandler(repository.NewCardRepository(pool))
+	groupHandler      := handler.NewGroupHandler(repository.NewGroupRepository(pool))
+	inviteHandler     := handler.NewInviteHandler(repository.NewInviteRepository(pool))
+	friendHandler     := handler.NewFriendHandler(repository.NewFriendRepository(pool))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -53,21 +59,29 @@ func main() {
 	mux.HandleFunc("GET /me/stats", auth(userHandler.GetMyStats))
 	mux.HandleFunc("GET /me/settings", auth(userHandler.GetMySettings))
 	mux.HandleFunc("PATCH /me/settings", auth(userHandler.UpdateMySettings))
+	mux.HandleFunc("GET /me/weak-words", auth(userHandler.GetMyWeakCards))
 
 	// Collections
-	mux.HandleFunc("GET /collections", auth(handler.ListCollections))
-	mux.HandleFunc("POST /collections", auth(handler.CreateCollection))
-	mux.HandleFunc("GET /collections/{id}", auth(handler.GetCollection))
-	mux.HandleFunc("PATCH /collections/{id}", auth(handler.UpdateCollection))
-	mux.HandleFunc("DELETE /collections/{id}", auth(handler.DeleteCollection))
-	mux.HandleFunc("GET /collections/{id}/decks", auth(handler.ListDecks))
-	mux.HandleFunc("POST /collections/{id}/decks", auth(handler.CreateDeck))
+	mux.HandleFunc("GET /collections", auth(collectionHandler.List))
+	mux.HandleFunc("POST /collections", auth(collectionHandler.Create))
+	mux.HandleFunc("GET /collections/{id}", auth(collectionHandler.Get))
+	mux.HandleFunc("PATCH /collections/{id}", auth(collectionHandler.Update))
+	mux.HandleFunc("DELETE /collections/{id}", auth(collectionHandler.Delete))
+	mux.HandleFunc("POST /collections/{id}/share", auth(collectionHandler.Share))
+	mux.HandleFunc("GET /collections/{id}/decks", auth(deckHandler.List))
+	mux.HandleFunc("POST /collections/{id}/decks", auth(deckHandler.Create))
 
 	// Decks
-	mux.HandleFunc("GET /decks/{id}", auth(handler.GetDeck))
-	mux.HandleFunc("PATCH /decks/{id}", auth(handler.UpdateDeck))
-	mux.HandleFunc("DELETE /decks/{id}", auth(handler.DeleteDeck))
-	mux.HandleFunc("POST /decks/{id}/share", auth(handler.ShareDeck))
+	mux.HandleFunc("GET /decks/{id}", auth(deckHandler.Get))
+	mux.HandleFunc("PATCH /decks/{id}", auth(deckHandler.Update))
+	mux.HandleFunc("DELETE /decks/{id}", auth(deckHandler.Delete))
+	mux.HandleFunc("POST /decks/{id}/share", auth(deckHandler.Share))
+	mux.HandleFunc("GET /decks/{id}/cards", auth(cardHandler.List))
+	mux.HandleFunc("POST /decks/{id}/cards", auth(cardHandler.Create))
+
+	// Cards
+	mux.HandleFunc("PATCH /cards/{id}", auth(cardHandler.Update))
+	mux.HandleFunc("DELETE /cards/{id}", auth(cardHandler.Delete))
 
 	// Users
 	mux.HandleFunc("GET /users", auth(userHandler.ListUsers))
@@ -76,6 +90,29 @@ func main() {
 	mux.HandleFunc("GET /users/{id}/stats", auth(userHandler.GetUserStats))
 	mux.HandleFunc("GET /users/{id}/settings", auth(userHandler.GetUserSettings))
 	mux.HandleFunc("PATCH /users/{id}/settings", auth(userHandler.UpdateUserSettings))
+	mux.HandleFunc("GET /users/search", auth(friendHandler.Search))
+
+	// Groups
+	mux.HandleFunc("GET /groups", auth(groupHandler.List))
+	mux.HandleFunc("POST /groups", auth(groupHandler.Create))
+	mux.HandleFunc("GET /groups/{id}", auth(groupHandler.Get))
+	mux.HandleFunc("PATCH /groups/{id}", auth(groupHandler.Update))
+	mux.HandleFunc("DELETE /groups/{id}", auth(groupHandler.Delete))
+	mux.HandleFunc("POST /groups/{id}/leave", auth(groupHandler.Leave))
+	mux.HandleFunc("POST /groups/{id}/invite", auth(inviteHandler.Create))
+
+	// Invites
+	mux.HandleFunc("GET /invites", auth(inviteHandler.List))
+	mux.HandleFunc("GET /invites/pending-count", auth(inviteHandler.PendingCount))
+	mux.HandleFunc("POST /invites/{id}/accept", auth(inviteHandler.Accept))
+	mux.HandleFunc("POST /invites/{id}/decline", auth(inviteHandler.Decline))
+
+	// Friends
+	mux.HandleFunc("GET /friends", auth(friendHandler.List))
+	mux.HandleFunc("GET /friends/requests", auth(friendHandler.ListPendingRequests))
+	mux.HandleFunc("POST /friends/request", auth(friendHandler.SendRequest))
+	mux.HandleFunc("POST /friends/{id}/accept", auth(friendHandler.Accept))
+	mux.HandleFunc("POST /friends/{id}/decline", auth(friendHandler.Decline))
 
 	srv := &http.Server{
 		Addr:    ":" + port,

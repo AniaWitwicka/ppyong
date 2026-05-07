@@ -188,6 +188,7 @@ class _LoginForm extends StatefulWidget {
 class _LoginFormState extends State<_LoginForm> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _passwordFocus = FocusNode();
   bool _showPassword = false;
   bool _loading = false;
 
@@ -195,6 +196,7 @@ class _LoginFormState extends State<_LoginForm> {
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -226,13 +228,21 @@ class _LoginFormState extends State<_LoginForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppInput(hint: 'Email', controller: _emailCtrl, keyboardType: TextInputType.emailAddress),
+        AppInput(
+          hint: 'Email',
+          controller: _emailCtrl,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => _passwordFocus.requestFocus(),
+        ),
         const SizedBox(height: 12),
         _PasswordInput(
           hint: 'Password',
           controller: _passwordCtrl,
+          focusNode: _passwordFocus,
           show: _showPassword,
           onToggle: () => setState(() => _showPassword = !_showPassword),
+          onSubmitted: (_) => _submit(),
         ),
         const SizedBox(height: 10),
         Align(
@@ -365,16 +375,23 @@ class _PasswordInput extends StatelessWidget {
     required this.controller,
     required this.show,
     required this.onToggle,
+    this.focusNode,
+    this.onSubmitted,
   });
   final String hint;
   final TextEditingController controller;
   final bool show;
   final VoidCallback onToggle;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
+      onSubmitted: onSubmitted,
+      textInputAction: onSubmitted != null ? TextInputAction.done : null,
       obscureText: !show,
       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
       decoration: InputDecoration(

@@ -503,7 +503,7 @@ class _DeckRow extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => FlashcardStudyScreen(deckName: deck.name as String),
+                builder: (_) => FlashcardStudyScreen(deckId: deck.id as String, deckName: deck.name as String),
               ),
             ),
             child: Container(

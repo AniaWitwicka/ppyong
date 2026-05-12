@@ -3,12 +3,30 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/yourname/koreanapp-backend/internal/auth"
 	"github.com/yourname/koreanapp-backend/internal/repository"
 )
+
+// allowedEmails returns the set of emails permitted to register.
+// When ALLOWED_EMAILS is unset every email is allowed (dev mode).
+func allowedEmails() map[string]bool {
+	raw := os.Getenv("ALLOWED_EMAILS")
+	if raw == "" {
+		return nil // nil == open
+	}
+	set := map[string]bool{}
+	for _, e := range strings.Split(raw, ",") {
+		if e = strings.TrimSpace(strings.ToLower(e)); e != "" {
+			set[e] = true
+		}
+	}
+	return set
+}
 
 type AuthHandler struct {
 	authRepo *repository.AuthRepository
@@ -37,7 +55,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if allowed := allowedEmails(); allowed != nil && !allowed[strings.ToLower(req.Email)] {
+		writeError(w, http.StatusForbidden, "registration is by invitation only")
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to process password")
 		return

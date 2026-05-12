@@ -1,32 +1,24 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/card.dart';
+import '../models/collection.dart';
+import '../models/deck.dart';
+import '../services/card_service.dart';
+import '../services/collection_service.dart';
+import '../services/deck_service.dart';
 import '../theme/app_theme.dart';
-
-typedef _CardData = ({
-  String korean,
-  String romanisation,
-  String translation,
-  String notes,
-});
-
-const _mockCards = <_CardData>[
-  (korean: '안녕하세요', romanisation: 'annyeonghaseyo', translation: 'Hello', notes: 'Formal greeting'),
-  (korean: '감사합니다', romanisation: 'gamsahamnida', translation: 'Thank you', notes: 'Formal'),
-  (korean: '괜찮아요', romanisation: 'gwaenchanayo', translation: "It's okay", notes: 'Casual'),
-  (korean: '죄송합니다', romanisation: 'joesonghamnida', translation: "I'm sorry", notes: 'Formal'),
-  (korean: '안녕히 계세요', romanisation: 'annyeonghi gyeseyo', translation: 'Goodbye', notes: 'Said to one who stays'),
-];
-
-const _dueMockCount = 5;
-const _weakMockCount = 2;
+import '../widgets/app_toast.dart';
 
 enum _Direction { krToEn, enToKr }
 enum _Scope { all, due, weak }
 enum _Phase { pick, study, complete }
 
 class FlashcardStudyScreen extends StatefulWidget {
-  const FlashcardStudyScreen({super.key, this.deckName});
+  const FlashcardStudyScreen({super.key, this.deckName, this.deckId, this.isTab = false});
   final String? deckName;
+  final String? deckId;
+  final bool isTab;
 
   @override
   State<FlashcardStudyScreen> createState() => _FlashcardStudyScreenState();
@@ -36,18 +28,96 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   _Direction _direction = _Direction.krToEn;
   _Scope _scope = _Scope.all;
   _Phase _phase = _Phase.pick;
+
+  String? _deckId;
+  String? _deckName;
+
+  List<CardModel> _cards = [];
   int _index = 0;
   int _knewIt = 0;
   int _again = 0;
+  bool _loadingCards = false;
 
-  bool get _isTab => widget.deckName == null;
+  int _totalCount = 0;
+  int _dueCount = 0;
+  int _weakCount = 0;
 
-  void _startStudy() => setState(() => _phase = _Phase.study);
+  bool get _isTab => widget.isTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _deckId = widget.deckId;
+    _deckName = widget.deckName;
+    if (_deckId != null) _loadCounts();
+  }
+
+  void _onDeckSelected(String id, String name) {
+    setState(() {
+      _deckId = id;
+      _deckName = name;
+    });
+    _loadCounts();
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      final results = await Future.wait([
+        CardService.instance.listCards(_deckId!),
+        CardService.instance.listCards(_deckId!, scope: 'due'),
+        CardService.instance.listCards(_deckId!, scope: 'weak'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _totalCount = results[0].length;
+          _dueCount = results[1].length;
+          _weakCount = results[2].length;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _startStudy() async {
+    if (_isTab) {
+      setState(() => _phase = _Phase.study);
+      return;
+    }
+    setState(() => _loadingCards = true);
+    try {
+      final scope = _scope == _Scope.due
+          ? 'due'
+          : _scope == _Scope.weak
+              ? 'weak'
+              : '';
+      final cards = await CardService.instance.listCards(_deckId!, scope: scope);
+      if (!mounted) return;
+      if (cards.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('last_deck_id', _deckId!);
+        await prefs.setString('last_deck_name', _deckName ?? '');
+      }
+      setState(() {
+        _cards = cards;
+        _loadingCards = false;
+        _phase = cards.isEmpty ? _Phase.complete : _Phase.study;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingCards = false);
+    }
+  }
 
   void _answer(bool knew) {
+    final card = _cards.isNotEmpty ? _cards[_index] : null;
+    if (card != null) {
+      CardService.instance.reviewCard(card.id, knew).catchError((_) {
+        if (mounted) {
+          showAppToast(context, variant: ToastVariant.error, title: 'Review sync failed');
+        }
+      });
+    }
     setState(() {
       if (knew) { _knewIt++; } else { _again++; }
-      if (_index + 1 >= _mockCards.length) {
+      if (_cards.isEmpty || _index + 1 >= _cards.length) {
         _phase = _Phase.complete;
       } else {
         _index++;
@@ -55,47 +125,56 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
     });
   }
 
-  void _restart() => setState(() {
-    _index = 0;
-    _phase = _Phase.pick;
-    _knewIt = 0;
-    _again = 0;
-  });
+  void _restart() {
+    setState(() {
+      _index = 0;
+      _phase = _Phase.pick;
+      _knewIt = 0;
+      _again = 0;
+      _cards = [];
+    });
+    if (_deckId != null) _loadCounts();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Tab mode: show pick-deck prompt before study starts
-    if (_isTab && _phase == _Phase.pick) {
+    if ((_isTab || _deckId == null) && _phase == _Phase.pick) {
       return _PickDeckPrompt(
-        direction: _direction,
-        scope: _scope,
-        onDirectionChanged: (d) => setState(() => _direction = d),
-        onScopeChanged: (s) => setState(() => _scope = s),
-        onStart: _startStudy,
+        isTab: _isTab,
+        onDeckSelected: _onDeckSelected,
       );
     }
 
-    // Non-tab picker: radio-style direction + scope
     if (_phase == _Phase.pick) {
       return _DirectionPickerScreen(
-        deckName: widget.deckName!,
+        deckName: _deckName!,
         direction: _direction,
         scope: _scope,
         onDirectionChanged: (d) => setState(() => _direction = d),
         onScopeChanged: (s) => setState(() => _scope = s),
         onStart: _startStudy,
-        totalCards: _mockCards.length,
+        loading: _loadingCards,
+        totalCount: _totalCount,
+        dueCount: _dueCount,
+        weakCount: _weakCount,
       );
     }
 
     if (_phase == _Phase.complete) {
       return _SessionComplete(
-        deckName: widget.deckName,
+        deckName: _deckName,
         knewIt: _knewIt,
         again: _again,
-        total: _mockCards.length,
+        total: _cards.isNotEmpty ? _cards.length : 0,
         onRestart: _restart,
         isTab: _isTab,
+      );
+    }
+
+    if (_loadingCards) {
+      return const Scaffold(
+        backgroundColor: AppColors.offWhite,
+        body: Center(child: CircularProgressIndicator(color: AppColors.periwinkle)),
       );
     }
 
@@ -107,7 +186,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
             _StudyHeader(
               deckName: widget.deckName ?? 'Study',
               index: _index,
-              total: _mockCards.length,
+              total: _cards.length,
               isTab: _isTab,
               knewIt: _knewIt,
               again: _again,
@@ -115,7 +194,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
             Expanded(
               child: _StudyCard(
                 key: ValueKey(_index),
-                card: _mockCards[_index],
+                card: _cards[_index],
                 direction: _direction,
                 onAnswer: _answer,
               ),
@@ -127,70 +206,327 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   }
 }
 
-// ── Tab: pick-deck prompt ──────────────────────────────────────────────────
+// ── Deck picker ───────────────────────────────────────────────────────────
 
-class _PickDeckPrompt extends StatelessWidget {
+class _PickDeckPrompt extends StatefulWidget {
   const _PickDeckPrompt({
-    required this.direction,
-    required this.scope,
-    required this.onDirectionChanged,
-    required this.onScopeChanged,
-    required this.onStart,
+    required this.isTab,
+    required this.onDeckSelected,
   });
 
-  final _Direction direction;
-  final _Scope scope;
-  final ValueChanged<_Direction> onDirectionChanged;
-  final ValueChanged<_Scope> onScopeChanged;
-  final VoidCallback onStart;
+  final bool isTab;
+  final void Function(String id, String name) onDeckSelected;
+
+  @override
+  State<_PickDeckPrompt> createState() => _PickDeckPromptState();
+}
+
+class _PickDeckPromptState extends State<_PickDeckPrompt> {
+  List<Collection> _collections = [];
+  // collectionId → decks (null = not yet loaded)
+  final Map<String, List<DeckSummary>?> _decks = {};
+  final Set<String> _expanded = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCollections();
+  }
+
+  Future<void> _loadCollections() async {
+    try {
+      final cols = await CollectionService.instance.listCollections();
+      if (mounted) setState(() { _collections = cols; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggleCollection(String id) async {
+    if (_expanded.contains(id)) {
+      setState(() => _expanded.remove(id));
+      return;
+    }
+    setState(() => _expanded.add(id));
+    if (_decks[id] == null) {
+      try {
+        final decks = await DeckService.instance.listDecks(id);
+        if (mounted) setState(() => _decks[id] = decks);
+      } catch (_) {
+        if (mounted) setState(() => _decks[id] = []);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
+            // Header
             Container(
               width: double.infinity,
               color: AppColors.periwinkle,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Text(
-                'Learn',
-                style: Theme.of(context).textTheme.displayMedium?.copyWith(color: Colors.white),
+              padding: const EdgeInsets.fromLTRB(8, 8, 20, 20),
+              child: Row(
+                children: [
+                  if (!widget.isTab)
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  else
+                    const SizedBox(width: 20),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Choose a deck',
+                          style: Theme.of(context)
+                              .textTheme
+                              .displayMedium
+                              ?.copyWith(color: Colors.white, fontSize: 22)),
+                      Text('Select a deck to start studying',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: Colors.white.withOpacity(0.8))),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const Spacer(),
-            const Icon(Icons.school_rounded, size: 64, color: AppColors.fog),
-            const SizedBox(height: 16),
-            const Text('Pick a deck to start studying',
-                style: TextStyle(color: AppColors.ash, fontSize: 16)),
-            const SizedBox(height: 8),
-            const Text('Or tap below to study all due cards',
-                style: TextStyle(color: AppColors.fog, fontSize: 14)),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-              child: GestureDetector(
-                onTap: onStart,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: const BoxDecoration(
-                    color: AppColors.orange,
-                    borderRadius: AppRadius.pill,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'Study all due cards',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
+            // Body
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.periwinkle))
+                  : _collections.isEmpty
+                      ? _EmptyState()
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+                          itemCount: _collections.length,
+                          itemBuilder: (context, i) {
+                            final col = _collections[i];
+                            final isOpen = _expanded.contains(col.id);
+                            final decks = _decks[col.id];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _CollectionSection(
+                                collection: col,
+                                isOpen: isOpen,
+                                decks: decks,
+                                onToggle: () => _toggleCollection(col.id),
+                                onDeckTap: widget.onDeckSelected,
+                              ),
+                            );
+                          },
                         ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.library_books_rounded, size: 56, color: AppColors.fog),
+          SizedBox(height: 16),
+          Text('No collections yet',
+              style: TextStyle(color: AppColors.ash, fontSize: 16, fontWeight: FontWeight.w600)),
+          SizedBox(height: 6),
+          Text('Add decks in the Library tab first',
+              style: TextStyle(color: AppColors.fog, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionSection extends StatelessWidget {
+  const _CollectionSection({
+    required this.collection,
+    required this.isOpen,
+    required this.decks,
+    required this.onToggle,
+    required this.onDeckTap,
+  });
+
+  final Collection collection;
+  final bool isOpen;
+  final List<DeckSummary>? decks;
+  final VoidCallback onToggle;
+  final void Function(String id, String name) onDeckTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.all(Radius.circular(18)),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.ink.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Collection header row
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(18),
+              bottom: isOpen ? Radius.zero : const Radius.circular(18),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: collection.color.withOpacity(0.15),
+                      borderRadius: const BorderRadius.all(Radius.circular(12)),
+                    ),
+                    child: Center(
+                      child: Text(collection.emoji, style: const TextStyle(fontSize: 20)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(collection.name,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        Text('${collection.deckCount} deck${collection.deckCount == 1 ? '' : 's'}',
+                            style: Theme.of(context).textTheme.bodyMedium),
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: isOpen ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.fog, size: 22),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Deck list
+          if (isOpen) ...[
+            const Divider(height: 1, color: AppColors.border),
+            if (decks == null)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.periwinkle),
                   ),
                 ),
+              )
+            else if (decks!.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('No decks in this collection',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppColors.fog)),
+              )
+            else
+              ...decks!.map((deck) => _DeckRow(
+                    deck: deck,
+                    color: collection.color,
+                    onTap: () => onDeckTap(deck.id, deck.name),
+                    isLast: deck == decks!.last,
+                  )),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DeckRow extends StatelessWidget {
+  const _DeckRow({
+    required this.deck,
+    required this.color,
+    required this.onTap,
+    required this.isLast,
+  });
+
+  final DeckSummary deck;
+  final Color color;
+  final VoidCallback onTap;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: isLast
+          ? const BorderRadius.vertical(bottom: Radius.circular(18))
+          : BorderRadius.zero,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : const Border(bottom: BorderSide(color: AppColors.border)),
+        ),
+        child: Row(
+          children: [
+            Container(width: 4, height: 36, decoration: BoxDecoration(
+              color: color,
+              borderRadius: const BorderRadius.all(Radius.circular(4)),
+            )),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(deck.name,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontSize: 15)),
+                  Text('${deck.cardCount} cards',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                ],
               ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.periwinkle,
+                borderRadius: AppRadius.pill,
+              ),
+              child: const Text('Select',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -209,7 +545,10 @@ class _DirectionPickerScreen extends StatelessWidget {
     required this.onDirectionChanged,
     required this.onScopeChanged,
     required this.onStart,
-    required this.totalCards,
+    required this.loading,
+    required this.totalCount,
+    required this.dueCount,
+    required this.weakCount,
   });
 
   final String deckName;
@@ -218,7 +557,10 @@ class _DirectionPickerScreen extends StatelessWidget {
   final ValueChanged<_Direction> onDirectionChanged;
   final ValueChanged<_Scope> onScopeChanged;
   final VoidCallback onStart;
-  final int totalCards;
+  final bool loading;
+  final int totalCount;
+  final int dueCount;
+  final int weakCount;
 
   @override
   Widget build(BuildContext context) {
@@ -258,7 +600,7 @@ class _DirectionPickerScreen extends StatelessWidget {
                     Text('Ready to study?', style: Theme.of(context).textTheme.displayMedium),
                     const SizedBox(height: 4),
                     Text(
-                      '$totalCards cards in this deck',
+                      '$totalCount cards in this deck',
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
@@ -296,7 +638,9 @@ class _DirectionPickerScreen extends StatelessWidget {
                     _ScopePills(
                       scope: scope,
                       onChanged: onScopeChanged,
-                      totalCards: totalCards,
+                      totalCount: totalCount,
+                      dueCount: dueCount,
+                      weakCount: weakCount,
                     ),
                   ],
                 ),
@@ -305,7 +649,7 @@ class _DirectionPickerScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
               child: GestureDetector(
-                onTap: onStart,
+                onTap: loading ? null : onStart,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -314,14 +658,18 @@ class _DirectionPickerScreen extends StatelessWidget {
                     borderRadius: AppRadius.pill,
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    'Start studying',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
+                  child: loading
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text(
+                          'Start studying',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
                         ),
-                  ),
                 ),
               ),
             ),
@@ -391,18 +739,22 @@ class _ScopePills extends StatelessWidget {
   const _ScopePills({
     required this.scope,
     required this.onChanged,
-    required this.totalCards,
+    required this.totalCount,
+    required this.dueCount,
+    required this.weakCount,
   });
   final _Scope scope;
   final ValueChanged<_Scope> onChanged;
-  final int totalCards;
+  final int totalCount;
+  final int dueCount;
+  final int weakCount;
 
   @override
   Widget build(BuildContext context) {
     final options = [
-      (_Scope.all, 'All cards ($totalCards)'),
-      (_Scope.due, 'Due today ($_dueMockCount)'),
-      (_Scope.weak, 'Weak words ($_weakMockCount)'),
+      (_Scope.all, 'All cards ($totalCount)'),
+      (_Scope.due, 'Due today ($dueCount)'),
+      (_Scope.weak, 'Weak words ($weakCount)'),
     ];
     return Wrap(
       spacing: 8,
@@ -484,7 +836,7 @@ class _StudyHeader extends StatelessWidget {
             child: ClipRRect(
               borderRadius: AppRadius.pill,
               child: LinearProgressIndicator(
-                value: (index + 1) / total,
+                value: total > 0 ? (index + 1) / total : 0,
                 backgroundColor: AppColors.border,
                 valueColor: const AlwaysStoppedAnimation(AppColors.periwinkle),
                 minHeight: 8,
@@ -553,7 +905,7 @@ class _StudyCard extends StatefulWidget {
     required this.onAnswer,
   });
 
-  final _CardData card;
+  final CardModel card;
   final _Direction direction;
   final ValueChanged<bool> onAnswer;
 
@@ -663,7 +1015,6 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           children: [
-            // Swipe hints
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
               child: Row(
@@ -708,8 +1059,6 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
                 ],
               ),
             ),
-
-            // Card
             Expanded(
               child: AnimatedBuilder(
                 animation: Listenable.merge([_flipAnim, _entranceAnim]),
@@ -763,9 +1112,7 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
                 },
               ),
             ),
-
             const SizedBox(height: 16),
-
             if (!_isFlipped)
               Text(
                 'Tap to reveal',
@@ -775,9 +1122,7 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
                     ),
               )
             else
-              _AnswerButtons(
-                onAnswer: _commitSwipe,
-              ),
+              _AnswerButtons(onAnswer: _commitSwipe),
           ],
         ),
       ),
@@ -793,7 +1138,7 @@ class _CardFace extends StatelessWidget {
     required this.isFlipped,
   });
 
-  final _CardData card;
+  final CardModel card;
   final _Direction direction;
   final bool isFront;
   final bool isFlipped;
@@ -832,7 +1177,7 @@ class _CardFace extends StatelessWidget {
 
 class _FrontContent extends StatelessWidget {
   const _FrontContent({required this.card, required this.showKorean});
-  final _CardData card;
+  final CardModel card;
   final bool showKorean;
 
   @override
@@ -868,7 +1213,7 @@ class _FrontContent extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
-        if (showKorean) ...[
+        if (showKorean && card.romanisation.isNotEmpty) ...[
           const SizedBox(height: 10),
           Text(
             card.romanisation,
@@ -894,7 +1239,7 @@ class _FrontContent extends StatelessWidget {
 
 class _BackContent extends StatelessWidget {
   const _BackContent({required this.card, required this.showKorean});
-  final _CardData card;
+  final CardModel card;
   final bool showKorean;
 
   @override
@@ -930,7 +1275,7 @@ class _BackContent extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
-        if (!showKorean) ...[
+        if (!showKorean && card.romanisation.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
             card.romanisation,
@@ -1054,7 +1399,6 @@ class _SessionComplete extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Yellow squircle with star
               Container(
                 width: 80,
                 height: 80,

@@ -9,6 +9,7 @@ import '../widgets/edit_deck_sheet.dart';
 import '../widgets/add_flashcard_sheet.dart';
 import '../widgets/deck_share_dialog.dart';
 import 'flashcard_study_screen.dart';
+import 'multiple_choice_screen.dart';
 
 class DeckDetailScreen extends StatefulWidget {
   const DeckDetailScreen({
@@ -115,11 +116,14 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
               accentColor: widget.accentColor,
               deckId: widget.deckId,
               deckName: deck.name,
+              description: deck.description,
+              onEditSaved: _load,
             ),
             Expanded(
               child: ListView(
                 children: [
                   _HeroSection(
+                    deckId: widget.deckId,
                     deckName: deck.name,
                     mastered: deck.masteredCount,
                     learning: deck.learningCount,
@@ -144,12 +148,21 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
 // ── Top bar ───────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.collectionName, required this.accentColor, required this.deckId, required this.deckName});
+  const _TopBar({
+    required this.collectionName,
+    required this.accentColor,
+    required this.deckId,
+    required this.deckName,
+    this.description,
+    this.onEditSaved,
+  });
 
   final String collectionName;
   final Color accentColor;
   final String deckId;
   final String deckName;
+  final String? description;
+  final VoidCallback? onEditSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +228,15 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: () => showEditDeckSheet(context, deckName: deckName),
+            onTap: () async {
+              final updated = await showEditDeckSheet(
+                context,
+                deckId: deckId,
+                deckName: deckName,
+                description: description,
+              );
+              if (updated) onEditSaved?.call();
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: const BoxDecoration(
@@ -242,6 +263,7 @@ class _TopBar extends StatelessWidget {
 
 class _HeroSection extends StatelessWidget {
   const _HeroSection({
+    required this.deckId,
     required this.deckName,
     required this.mastered,
     required this.learning,
@@ -250,6 +272,7 @@ class _HeroSection extends StatelessWidget {
     required this.cards,
   });
 
+  final String deckId;
   final String deckName;
   final int mastered;
   final int learning;
@@ -282,7 +305,7 @@ class _HeroSection extends StatelessWidget {
           const SizedBox(height: 12),
           _SrsChips(mastered: mastered, learning: learning, newCards: newCards),
           const SizedBox(height: 16),
-          _ActionButtons(deckName: deckName, accentColor: accentColor, cards: cards),
+          _ActionButtons(deckId: deckId, deckName: deckName, accentColor: accentColor, cards: cards),
         ],
       ),
     );
@@ -442,48 +465,75 @@ class _Chip extends StatelessWidget {
 }
 
 class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({required this.deckName, required this.accentColor, required this.cards});
+  const _ActionButtons({required this.deckId, required this.deckName, required this.accentColor, required this.cards});
+  final String deckId;
   final String deckName;
   final Color accentColor;
   final List<CardModel> cards;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => FlashcardStudyScreen(deckName: deckName)),
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              decoration: const BoxDecoration(color: AppColors.orange, borderRadius: AppRadius.pill),
-              alignment: Alignment.center,
-              child: Text('Study now',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
+        // Primary CTA
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => FlashcardStudyScreen(deckId: deckId, deckName: deckName)),
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: const BoxDecoration(color: AppColors.orange, borderRadius: AppRadius.pill),
+            alignment: Alignment.center,
+            child: Text('Study now',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => _showPreview(context, cards),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: AppRadius.pill,
-                border: Border.all(color: AppColors.border, width: 1.5),
+        const SizedBox(height: 10),
+        // Secondary row
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => MultipleChoiceScreen(deckId: deckId, deckName: deckName)),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: AppRadius.pill,
+                    border: Border.all(color: AppColors.orange, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('Multiple choice',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: AppColors.orange, fontWeight: FontWeight.w600)),
+                ),
               ),
-              alignment: Alignment.center,
-              child: Text('Preview cards',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: AppColors.ink, fontWeight: FontWeight.w600)),
             ),
-          ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _showPreview(context, cards),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: AppRadius.pill,
+                    border: Border.all(color: AppColors.border, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('Preview cards',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: AppColors.ink, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

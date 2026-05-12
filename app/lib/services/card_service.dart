@@ -48,4 +48,8 @@ class CardService {
   Future<void> deleteCard(String id) async {
     await _api.delete('/cards/$id');
   }
+
+  Future<void> reviewCard(String id, bool knewIt) async {
+    await _api.post('/cards/$id/review', {'knew_it': knewIt});
+  }
 }

@@ -8,11 +8,12 @@ import (
 )
 
 type CardHandler struct {
-	repo *repository.CardRepository
+	repo    *repository.CardRepository
+	srsRepo *repository.SRSRepository
 }
 
-func NewCardHandler(repo *repository.CardRepository) *CardHandler {
-	return &CardHandler{repo: repo}
+func NewCardHandler(repo *repository.CardRepository, srsRepo *repository.SRSRepository) *CardHandler {
+	return &CardHandler{repo: repo, srsRepo: srsRepo}
 }
 
 func (h *CardHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -73,4 +74,20 @@ func (h *CardHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CardHandler) Review(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		KnewIt bool `json:"knew_it"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	progress, err := h.srsRepo.Review(r.Context(), r.PathValue("id"), userIDFromContext(r), req.KnewIt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to record review")
+		return
+	}
+	writeJSON(w, http.StatusOK, progress)
 }

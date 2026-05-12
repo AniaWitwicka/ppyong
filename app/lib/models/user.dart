@@ -37,6 +37,7 @@ class UserStats {
   const UserStats({
     required this.masteredCount,
     required this.learningCount,
+    required this.dueCount,
     required this.sessionCount,
     required this.accuracyPercent,
     required this.weeklyActivity,
@@ -44,6 +45,7 @@ class UserStats {
 
   final int masteredCount;
   final int learningCount;
+  final int dueCount;
   final int sessionCount;
   final int accuracyPercent;
   final List<bool> weeklyActivity; // index 0 = Mon, 6 = Sun
@@ -51,6 +53,7 @@ class UserStats {
   factory UserStats.fromJson(Map<String, dynamic> j) => UserStats(
         masteredCount: j['mastered_count'] as int,
         learningCount: j['learning_count'] as int,
+        dueCount: j['due_count'] as int? ?? 0,
         sessionCount: j['session_count'] as int,
         accuracyPercent: j['accuracy_percent'] as int,
         weeklyActivity: (j['weekly_activity'] as List).cast<bool>(),

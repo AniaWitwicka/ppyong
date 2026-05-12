@@ -637,3 +637,391 @@ The bottom nav now has 5 tabs. Icon sizes reduced slightly to 20px to fit:
 | Profile | Person circle | `#FCCA59` filled | `#7A5500` |
 
 Badge: orange `#F5793B` circle, white text, positioned top-right of icon — used on Groups tab for pending invites.
+
+---
+
+## 15. Learn tab — study type picker
+
+### Overview
+The Learn tab's main screen. Shows all available study modes as selectable cards. Replaces the placeholder "feature selector" from the original screen map.
+
+### Layout
+- **Header band** — periwinkle `#99B7F5`
+  - Title "Learn" (24px, 800)
+  - Subtitle "Pick a study mode" (13px, dark periwinkle)
+- **Mode cards** — scrollable list, gap 12px
+
+### Mode card structure
+Each card: white bg, 2px colored border, 22px radius, 18px padding, flex row
+- **Decorative corner** — colored tint quarter-circle top-right (80×80px)
+- **Icon container** — 52px rounded square (18px radius), solid color bg, white icon
+- **Content** — title (17px, 800) + description (13px, ash) + tag chips row
+- **Chevron** — right side, colored to match card
+
+### Active modes
+
+**Flashcards**
+- Border + icon bg: periwinkle `#99B7F5`
+- Corner tint: `#EEF3FE`
+- Tags: "Both directions" · "SRS"
+- Description: "Flip cards to reveal translations. Swipe to rate yourself."
+
+**Multiple choice**
+- Border + icon bg: orange `#F5793B`
+- Corner tint: `#FFF8F4`
+- Tags: "4 options" · "Instant feedback"
+- Description: "Pick the correct translation from 4 options."
+
+### Coming soon modes (greyed out, 60% opacity)
+- "Coming soon" badge: fog bg, fog text, top-right of card
+- No chevron, non-interactive
+
+**Matching**
+- Description: "Match Korean words to their translations."
+
+**Type the answer**
+- Description: "Type the Korean or translation from memory."
+
+### Bottom nav
+Learn tab active (`#99B7F5` filled icons, `#1A3A7A` label)
+
+---
+
+## 16. Multiple choice quiz screen
+
+### Overview
+An interactive 4-option quiz. One correct answer + 3 randomly pulled wrong answers from other cards in the deck. Instant visual feedback on every answer.
+
+### Layout — top bar
+- Back button (white card, chevron)
+- Progress bar — orange `#F5793B` fill on fog track, 7px height, updates per question
+- Score chips — right side:
+  - Correct: `#E8F5EE` bg, green `#267F53` count, ✓ icon
+  - Wrong: `#FEF0F6` bg, pink `#C45A8A` count, ✗ icon
+
+### Layout — question card
+Full-width orange `#F5793B` rounded card (24px radius):
+- Label: "What does this mean?" (11px, uppercase, white 70% opacity)
+- Korean word: 36px, 800, white
+- Romanisation: 14px, white 75% opacity
+- Question counter: "Question X of Y" (11px, white 60% opacity)
+
+### Layout — answer options
+4 buttons stacked vertically, gap 8px:
+- Default state: white bg, `#E8E4DE` border (2px), 18px radius
+- Each button: letter badge (A/B/C/D) in fog square (26px, 8px radius) + answer text
+
+### Answer feedback states
+
+**Correct answer selected:**
+- Selected button: `#E8F5EE` bg, `#267F53` border, dark green text
+- Letter badge: green bg, white letter
+- Question card: subtle scale pop animation (1→1.03→1, 300ms)
+
+**Wrong answer selected:**
+- Selected button: `#FEF0F6` bg, `#C45A8A` border, dark pink text, shake animation
+- Correct button: simultaneously revealed in green (`#E8F5EE` bg, `#267F53` border)
+- All other buttons: 55% opacity, non-interactive
+
+**After answering:**
+- All buttons disabled
+- "Next →" button appears below (orange pill, full width), 400ms delay
+
+### Answer generation logic
+```
+correctAnswer = current card translation
+wrongAnswers  = 3 random translations from other cards in deck (shuffled)
+options       = shuffle([correctAnswer, ...wrongAnswers])
+correctIndex  = options.indexOf(correctAnswer)
+```
+
+### Animations
+- Question card slide in: `translateX(30px) → 0`, opacity 0→1, 200ms ease-out
+- Wrong answer shake: `translateX(-6px, 6px, -4px, 4px, 0)`, 400ms
+- Correct pop: `scale(1 → 1.03 → 1)`, 300ms
+
+### Completion screen
+Shown after all questions answered:
+- Yellow squircle with 🎉 emoji (72px, 24px radius)
+- "Quiz complete!" (24px, 800)
+- "You answered X questions" subtitle
+- Three stat cards side by side:
+  - Correct: `#E8F5EE` bg, green count + "CORRECT" label
+  - Wrong: `#FEF0F6` bg, pink count + "WRONG" label
+  - Score: `#FEF9E8` bg, yellow percentage + "SCORE" label
+- "Try again" orange pill button
+- "Back to study modes" ghost button
+
+### Flutter implementation notes
+- Wrong answers: query 3 random cards from same deck excluding current card
+- Shuffle options array before rendering
+- Disable all option buttons immediately on tap (before animation completes) to prevent double-tap
+- Use `AnimatedContainer` or `TweenAnimationBuilder` for color transitions
+- Progress bar: `LinearProgressIndicator` with orange color
+
+# Ppyong — DESIGN_SCREENS.md additions
+
+Append the following sections to `/docs/DESIGN_SCREENS.md`.
+
+Also update the **Screens overview** table:
+
+| Screen | Status | Tab |
+|--------|--------|-----|
+| Teacher dashboard | ✅ Designed | Home (role=teacher) |
+| Group detail — Teacher view | ✅ Designed | Home (role=teacher) |
+| Import deck (3-step) | ✅ Designed | Home (role=teacher) |
+| Role view switcher | ✅ Designed | Header chip |
+| Student home (role=teacher → toggled) | ↪️ Reuses Home screen |
+
+---
+
+## 17. Teacher dashboard
+
+### Overview
+The Home tab content when `role === teacher`. Same 5-tab bottom nav as the student app — only the Home content swaps. Uses forest green `#267F53` as the teacher identity color (matches the logo and signals authority/mastery; the only saturated palette color not yet claimed by a tab).
+
+### Layout
+- **Header band** — forest green `#267F53`
+  - Greeting: "안녕하세요," (13px, Nunito 600, 85% opacity) + name "김 선생님" (22px, Nunito 800)
+  - **Role switcher chip** — semi-transparent white pill below name, "TEACHER VIEW ›" (10px, 600 + chevron). Tappable — flips Home to the student view. Yellow dot prefix `#FCCA59`.
+  - Right side: notification bell icon button (36px, semi-transparent white square, 12px radius) with orange `#F5793B` dot (top-right, 8px, green border to match header) + teacher avatar (38px, yellow `#FCCA59` bg, dark yellow `#7A5500` initial).
+  - Decorative: large white circle at 12% opacity, top-right corner (140px), pulled outside frame.
+
+- **Stats row** — 3 tiles overlapping header (margin-top: -22px, padding: 0 16px, gap 8px)
+  1. **Active today** — yellow `#FCCA59` bg, `#E6B547` border, dark yellow text, flame corner icon. Format: `8/12` (active over total).
+  2. **Avg accuracy** — green tint `#E8F5EE` bg, green `#267F53` border, dark green text, trend-up corner icon. Format: `84%`.
+  3. **Decks live** — periwinkle `#99B7F5` bg, `#7B9CE5` border, dark periwinkle text, stack corner icon. Format: `14`.
+  - Tile structure: 18px radius, 2px border, 12px padding, big number (22px, Nunito 800) with optional `/total` suffix (11px, 700, 70% opacity), label below (10px, DM Sans 500).
+  - Corner icon container: 18px rounded square, white 55% opacity bg, top-right.
+
+- **Needs attention** section
+  - Section title "Needs attention" + count chip (pink `#F296BD` bg, white text)
+  - "See all" right link (ash, 12px)
+  - Attention card structure:
+    - 40px avatar (member's identity color, white initials)
+    - Name (14px, Nunito 700) + group tag chip (9px, fog tint, 1×6 padding)
+    - Reason line (12px, ash) with **bold detail** (ink)
+    - Right chevron (fog)
+  - **Severity variants:**
+    - **Urgent** (pink): pink `#F296BD` border, pink tint `#FEF0F6` bg — e.g. "Streak ended yesterday — after 12 days"
+    - **Warn** (yellow): yellow `#FCCA59` border, yellow tint `#FEF9E8` bg — e.g. "Stuck on 5 weak words for 3 days", "No study for 2 days"
+  - Tappable → opens student detail panel
+
+- **My groups** section
+  - Section title + "Manage" link
+  - Group card structure (cursor: pointer, scale 0.99 on press):
+    - 22px radius, 2px colored border (matches group's identity color), 14px padding, white bg
+    - Top row: 44px emoji container (14px radius, identity tint bg) + name (15px, Nunito 800) + meta line ("4 students · 6 decks · last active 2h ago", 11px ash with bold values) + chevron
+    - Overlapping member avatars (22px circle, 2px white border, -6px overlap, identity color bg, first-letter initials), with "class avg" label after
+    - Dashed-top progress section: 3-segment progress bar showing mastered / learning / new + class average percent (Nunito 800, ink)
+  - Identity colors: TOPIK 2 = periwinkle, Beginners = green, K-drama club = pink
+
+- **Recent activity** feed
+  - Section title + "Today" filter chip
+  - Container: white card, 2px `#E8E4DE` border, 22px radius, padding 4px 14px
+  - Item rows divided by dashed `#E8E4DE` line, 12px vertical padding
+  - Structure: 30px icon square (10px radius, tinted bg, colored icon) + text block (12px DM Sans, ink, **bold subject + target**) + time (10px, fog)
+  - **Icon variants** (one per `kind`):
+    - `mastered` → green tint bg, green check icon
+    - `streak` → yellow tint bg, dark yellow flame icon
+    - `quiz` → periwinkle tint bg, dark periwinkle target icon
+    - `weak` → pink tint bg, dark pink sparkle icon
+
+- **Two stacked FABs** — bottom-right, above bottom nav
+  - **Import deck** (white, secondary) — at `bottom: 142px`, 52px height, white bg, ink text, inset 1.5px `#E8E4DE` border, soft shadow, upload icon in green. Opens Import deck screen.
+  - **Assign deck** (orange, primary) — at `bottom: 84px`, orange `#F5793B`, white text, inset 2px shadow `#D85F22`, plus icon. Opens Assign sheet.
+
+### Mock data shape
+```dart
+class TeacherDashboardState {
+  String name;            // "Kim"
+  String nameKo;          // "김 선생님"
+  int activeToday;        // 8
+  int totalStudents;      // 12
+  int avgAccuracy;        // 84
+  int decksAssigned;      // 14
+  List<AttentionItem> attention;
+  List<GroupSummary> groups;
+  List<ActivityEvent> recentActivity;
+}
+```
+
+### Bottom nav
+Home tab active — `#99B7F5` filled icon, `#1A3A7A` label (unchanged).
+
+---
+
+## 18. Group detail — Teacher view
+
+### Trigger
+Tapping any group card on the teacher dashboard.
+
+### Layout
+- **Header band** — forest green `#267F53` (matches teacher identity)
+  - Back chevron button (36px, semi-transparent white square) + small "Group · Teacher view" label + three-dot menu (right)
+  - Group identity row: 50px emoji square (16px radius, white 20% bg) + group name (20px, Nunito 800) + meta line ("4 students · 4 decks · class avg **78%**")
+  - **Segmented control** — three segments: Students · Decks · Activity. White pill active (dark green text `#16563A`), transparent inactive (75% white text). 4px inner padding, 999px radius, white 20% bg, backdrop blur.
+
+- **Class roster section** (Students tab — default)
+  - Title + "Sort" link
+  - Student row structure:
+    - 40px avatar (identity color, 13px Nunito 800 white initial)
+    - Name (14px Nunito 700)
+    - Sub-line (11px ash): flame icon (orange when active, fog when 0) + "X day streak" · dot · "Y due"
+    - Inline progress bar (5px height, 999px radius) + percent (Nunito 800, 11px, 28px min width right-aligned)
+    - **Progress fill color rules:**
+      - `progress > 80` → green `#267F53`
+      - `progress > 60` → periwinkle `#99B7F5`
+      - else → pink `#F296BD`
+    - **Warn variant** (streak = 0 or stale): yellow `#FCCA59` border, yellow tint `#FEF9E8` bg
+
+- **Shared decks section**
+  - Title only
+  - Deck chips (pill 999px, 1.5px `#E8E4DE` border, white bg, padding 6×10, 11px DM Sans 500): emoji + name
+  - Action row at bottom: **Message group** (ghost) + **Assign deck** (orange primary, full width split 50/50)
+
+### Bottom nav
+Home tab active (this is still under the Home tab in teacher mode).
+
+---
+
+## 19. Import deck flow
+
+### Overview
+3-step stepper for bulk-adding cards into a new deck. Reached via the white **Import deck** FAB on the teacher dashboard. Could also be reachable from Library FAB for non-teacher members (TBD).
+
+### Header (shared across all 3 steps)
+- Forest green `#267F53` band
+- Back chevron (top-left) + title "Import deck" (Nunito 800, 18px) + subtitle "Bulk add cards from text or a file"
+- **Step indicator** — 3 dots connected by 1.5px white lines (30% opacity)
+  - Inactive: 22px circle, white 25% bg, white number
+  - Active: 22px circle, white bg, 2px white border, dark green number `#16563A`
+  - Done: 22px circle, green `#267F53` bg, white check
+  - Labels next to each: Source · Preview · Save (11px DM Sans 600 white)
+
+### Step 1 — Source
+
+- **Source tabs** — 4 evenly-spaced tab buttons, vertical icon+label layout, 14px radius
+  - Selected: 2px green border, green tint `#E8F5EE` bg, dark green `#16563A` label
+  - Unselected: 1.5px `#E8E4DE` border, white bg, ash label
+  - Options: **Paste** (clipboard icon) · **CSV** (file-up icon) · **Sheet** (link icon) · **Anki** (sparkle icon)
+
+- **Paste tab (default)**
+  - Label "Paste cards" + monospace format hint right-aligned: `KO | EN | ROMAJA`
+  - Textarea field — 180px min height, JetBrains Mono 12px, 1.5 line-height, no resize
+  - Default placeholder content (6 example cards, one per line, `|` separated)
+  - Yellow tip card below — yellow tint `#FEF9E8` bg, yellow `#FCCA59` 1.5px border, 12px radius, sparkle icon: "One card per line. Separate fields with **|**, **tab**, or **comma**. We'll auto-detect."
+
+- **CSV tab**
+  - Dashed dropzone — 2px dashed periwinkle `#99B7F5`, periwinkle tint `#EEF3FE` bg, 18px radius, 32×16px padding, centered
+  - 48px white square (14px radius) with periwinkle file-up icon
+  - "Drop a CSV file here" (Nunito 700, 14px, dark periwinkle) + "or tap to browse · max 5 MB" (11px ash)
+  - "Choose file" ghost button (36px height, auto width)
+
+- **Sheet tab**
+  - Label "Google Sheet URL"
+  - Standard input with placeholder `https://docs.google.com/spreadsheets/d/...`
+  - Hint (11px ash): "Sheet must be shared as 'Anyone with link'. We read the first three columns."
+
+- **Anki tab**
+  - Dashed dropzone — pink `#F296BD` dashed border, pink tint `#FEF0F6` bg
+  - "Drop an .apkg here" (Nunito 700, dark pink `#C45A8A`) + "Notes → cards. Decks become collections."
+
+- **Footer buttons:** Cancel (ghost) · **Preview** (orange primary, chevron right icon)
+
+### Step 2 — Preview
+
+- Section title "Preview" + count chip (green `#267F53` bg, white text) + format reminder `KO → EN → ROMAJA`
+- **Auto-detect banner** — green tint `#E8F5EE` bg, green 1.5px border, 12px radius, green check icon: "Auto-detected format: **Korean | English | Romaja**"
+- **Card preview list** (max 6 visible, "+ N more cards…" footer)
+  - White bg, 1.5px `#E8E4DE` border, 14px radius, 10×12 padding
+  - 22px row number square (8px radius, periwinkle tint bg, mono 10px) + KO (Nunito 800 14px, ink) + EN · romaja sub-line (DM Sans 11px ash + JetBrains Mono 10px)
+  - Pencil edit button (fog, top-right)
+- **Footer:** Back (ghost, chevron-left) · **Continue** (orange primary, chevron-right)
+
+### Step 3 — Save (destination)
+
+- **Deck name** — text input, default "Greetings & basics"
+- **Collection** — pill chip row (TOPIK 2, Beginners, K-drama club, + New)
+  - Selected: 2px green border, green tint bg, dark green text
+  - Unselected: 1.5px `#E8E4DE` border, white bg
+- **Auto-assign to group (optional)** — radio row list
+  - First option always: "Don't assign — save to library only" with em-dash emoji
+  - Then one row per teacher's groups (emoji + name)
+  - Selected row: 2px green border, green tint `#E8F5EE` bg, filled green circle check (20px)
+- **Summary chip** — periwinkle tint `#EEF3FE` bg, periwinkle `#99B7F5` 1.5px border, 12px radius, stack icon: "**N cards** → '[deck name]' in **[collection]**"
+- **Footer:** Back (ghost) · **Save deck** (orange primary, sparkle icon)
+
+### On save
+- Returns to dashboard
+- Success toast (green variant): `Imported N cards into "[deck name]"`
+- If auto-assign was chosen, also push notification to that group's students
+
+### State shape
+```dart
+class ImportDeckState {
+  ImportSource source;            // paste | csv | sheet | anki
+  String rawText;                 // for paste
+  String? sheetUrl;
+  File? csvFile, apkgFile;
+  String detectedFormat;          // 'ko|en|romaja' etc
+  List<ParsedCard> parsedCards;
+  String deckName;
+  String collection;
+  String? autoAssignGroupId;      // null = library only
+}
+```
+
+---
+
+## 20. Role view switcher
+
+### Overview
+A small chip in the header that lets users with `role === teacher` flip the Home tab between **Teacher view** (dashboard at §17) and **Student view** (existing Home at §1). Same account, same nav — only Home content swaps.
+
+### Visibility rules
+- Chip only renders when `user.role === 'teacher'` (or `'admin'`)
+- Members never see it; their Home is always the student view
+
+### State
+- `activeRole` — `'teacher' | 'student'`, persisted per user in localStorage (or shared prefs)
+- Defaults to `'teacher'` for teachers on first login
+- All other tabs (Learn, Library, Groups, Profile) are unaffected — they render the same regardless of `activeRole`
+
+### Visual
+- Pill: semi-transparent white `rgba(255,255,255,0.18)`, 999px radius, 3×10×3×8 padding, backdrop blur, sits inside header
+- Yellow dot `#FCCA59` (5×5) + label (10px DM Sans 600, white, letter-spacing 0.06em) + chevron-right (10px)
+- Teacher view: "TEACHER VIEW ›" on green header
+- Student view: "STUDENT VIEW ›" on periwinkle header (same chip styling, just different label)
+
+### Interaction
+- Tap → toggle role, swap Home content, persist
+- Optional: subtle slide-cross-fade transition (200ms) when flipping
+- Bottom nav stays put — no remount of the tab bar
+
+### Flutter implementation note
+```dart
+final activeRoleProvider = StateProvider<String>((ref) {
+  final user = ref.watch(userProvider);
+  final saved = ref.read(prefsProvider).getString('activeRole_${user.id}');
+  return saved ?? (user.role == 'teacher' ? 'teacher' : 'student');
+});
+
+// In HomeTab
+Widget build(BuildContext context, WidgetRef ref) {
+  final role = ref.watch(activeRoleProvider);
+  return role == 'teacher' ? TeacherDashboard() : StudentHome();
+}
+```
+
+---
+
+## Teacher identity color
+
+Forest green `#267F53` is now reserved as the **teacher view identity color**, used for:
+- Teacher dashboard header band
+- Group detail header (teacher view)
+- Import deck header
+- Selected state in teacher-only pickers (e.g. import source tabs, collection chips, auto-assign rows)
+
+This keeps a clear visual separation: periwinkle = student home, pink = groups, yellow = profile, green = teacher tools.

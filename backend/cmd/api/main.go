@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/yourname/koreanapp-backend/internal/db"
@@ -28,7 +29,7 @@ func main() {
 	authHandler       := handler.NewAuthHandler(repository.NewAuthRepository(pool))
 	collectionHandler := handler.NewCollectionHandler(repository.NewCollectionRepository(pool))
 	deckHandler       := handler.NewDeckHandler(repository.NewDeckRepository(pool))
-	cardHandler       := handler.NewCardHandler(repository.NewCardRepository(pool))
+	cardHandler       := handler.NewCardHandler(repository.NewCardRepository(pool), repository.NewSRSRepository(pool))
 	groupHandler      := handler.NewGroupHandler(repository.NewGroupRepository(pool))
 	inviteHandler     := handler.NewInviteHandler(repository.NewInviteRepository(pool))
 	friendHandler     := handler.NewFriendHandler(repository.NewFriendRepository(pool))
@@ -40,13 +41,18 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// Rate limiters — no external deps, pure in-memory
+	globalLimit := middleware.NewRateLimiter(120, time.Minute) // 120 req/min per IP across all routes
+	authLimit   := middleware.NewRateLimiter(10, time.Minute)  // 10 req/min per IP on auth endpoints only
+
 	// Public routes
 	mux.HandleFunc("GET /ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"message":"pong"}`))
 	})
-	mux.HandleFunc("POST /auth/register", authHandler.Register)
-	mux.HandleFunc("POST /auth/login", authHandler.Login)
+	// Auth endpoints get a stricter per-IP limit on top of the global one
+	mux.Handle("POST /auth/register", authLimit.Middleware(http.HandlerFunc(authHandler.Register)))
+	mux.Handle("POST /auth/login",    authLimit.Middleware(http.HandlerFunc(authHandler.Login)))
 
 	// Protected routes — require valid JWT
 	auth := func(h http.HandlerFunc) http.HandlerFunc {
@@ -82,6 +88,7 @@ func main() {
 	// Cards
 	mux.HandleFunc("PATCH /cards/{id}", auth(cardHandler.Update))
 	mux.HandleFunc("DELETE /cards/{id}", auth(cardHandler.Delete))
+	mux.HandleFunc("POST /cards/{id}/review", auth(cardHandler.Review))
 
 	// Users
 	mux.HandleFunc("GET /users", auth(userHandler.ListUsers))
@@ -116,7 +123,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    ":" + port,
-		Handler: middleware.Logger(middleware.CORS(mux)),
+		Handler: middleware.Logger(middleware.CORS(globalLimit.Middleware(middleware.MaxBodySize(1<<20)(mux)))),
 	}
 
 	log.Printf("starting server on :%s", port)

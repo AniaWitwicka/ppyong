@@ -45,6 +45,7 @@ type UserSummary struct {
 type UserStats struct {
 	MasteredCount   int    `json:"mastered_count"`
 	LearningCount   int    `json:"learning_count"`
+	DueCount        int    `json:"due_count"`
 	SessionCount    int    `json:"session_count"`
 	AccuracyPercent int    `json:"accuracy_percent"`
 	WeeklyActivity  []bool `json:"weekly_activity"` // index 0 = Mon, 6 = Sun

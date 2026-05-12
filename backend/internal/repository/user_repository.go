@@ -46,6 +46,11 @@ func (r *UserRepository) GetStats(ctx context.Context, id string) (*model.UserSt
 		SELECT COUNT(*) FROM srs_progress WHERE user_id = $1 AND interval_days < 7
 	`, id).Scan(&learning)
 
+	var due int
+	r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM srs_progress WHERE user_id = $1 AND due_date <= CURRENT_DATE
+	`, id).Scan(&due)
+
 	// Weekly activity: which days this Mon–Sun the user reviewed at least one card
 	rows, err := r.pool.Query(ctx, `
 		SELECT DISTINCT EXTRACT(DOW FROM last_reviewed)::int
@@ -71,6 +76,7 @@ func (r *UserRepository) GetStats(ctx context.Context, id string) (*model.UserSt
 	return &model.UserStats{
 		MasteredCount:   mastered,
 		LearningCount:   learning,
+		DueCount:        due,
 		SessionCount:    0, // tracked once sessions table exists
 		AccuracyPercent: 0, // tracked once review history exists
 		WeeklyActivity:  weekly,

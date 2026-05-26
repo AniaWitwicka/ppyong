@@ -27,16 +27,12 @@ class AuthService {
     return UserProfile.fromJson(me as Map<String, dynamic>);
   }
 
-  Future<UserProfile> register(String name, String email, String password) async {
-    final data = await ApiService.instance.post('/auth/register', {
+  Future<void> register(String name, String email, String password) async {
+    await ApiService.instance.post('/auth/register', {
       'name': name,
       'email': email,
       'password': password,
     });
-    final map = data as Map<String, dynamic>;
-    final token = map['token'] as String;
-    await _persist(token);
-    return UserProfile.fromJson(map['user'] as Map<String, dynamic>);
   }
 
   Future<void> logout() async {

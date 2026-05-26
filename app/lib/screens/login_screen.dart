@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_input.dart';
 import '../widgets/app_toast.dart';
 import 'home_screen.dart';
 import 'forgot_password_screen.dart';
+import 'pending_approval_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -213,8 +215,21 @@ class _LoginFormState extends State<_LoginForm> {
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      if (e.statusCode == 403) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PendingApprovalScreen()),
+        );
+      } else {
+        showAppToast(context,
+            variant: ToastVariant.error,
+            title: 'Login failed',
+            subtitle: 'Check your email and password');
+      }
     } catch (e) {
-      debugPrint('login error: $e');
       if (!mounted) return;
       setState(() => _loading = false);
       showAppToast(context,
@@ -315,7 +330,7 @@ class _RegisterFormState extends State<_RegisterForm> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const PendingApprovalScreen()),
       );
     } catch (_) {
       if (!mounted) return;

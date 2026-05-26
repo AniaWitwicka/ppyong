@@ -66,21 +66,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile, err := h.authRepo.CreateUser(r.Context(), req.Name, req.Email, string(hash))
-	if err != nil {
+	if _, err := h.authRepo.CreateUser(r.Context(), req.Name, req.Email, string(hash)); err != nil {
 		writeError(w, http.StatusConflict, "email already in use")
 		return
 	}
 
-	token, err := auth.GenerateToken(profile.ID)
-	if err != nil {
-		writeServerError(w, r, err)
-		return
-	}
-
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"token": token,
-		"user":  profile,
+		"message": "registration successful, your account is pending approval",
 	})
 }
 

@@ -27,12 +27,20 @@ class AuthService {
     return UserProfile.fromJson(me as Map<String, dynamic>);
   }
 
-  Future<void> register(String name, String email, String password) async {
-    await ApiService.instance.post('/auth/register', {
+  /// Returns true if the account was auto-activated (allowlisted email),
+  /// false if it's pending approval.
+  Future<bool> register(String name, String email, String password) async {
+    final data = await ApiService.instance.post('/auth/register', {
       'name': name,
       'email': email,
       'password': password,
     });
+    final map = data as Map<String, dynamic>;
+    if (map['token'] != null) {
+      await _persist(map['token'] as String);
+      return true;
+    }
+    return false;
   }
 
   Future<void> logout() async {

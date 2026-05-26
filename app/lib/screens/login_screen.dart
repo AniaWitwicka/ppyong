@@ -326,11 +326,11 @@ class _RegisterFormState extends State<_RegisterForm> {
 
     setState(() => _loading = true);
     try {
-      await AuthService.instance.register(name, email, password);
+      final activated = await AuthService.instance.register(name, email, password);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const PendingApprovalScreen()),
+        MaterialPageRoute(builder: (_) => activated ? const HomeScreen() : const PendingApprovalScreen()),
       );
     } catch (_) {
       if (!mounted) return;

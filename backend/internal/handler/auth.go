@@ -56,9 +56,15 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if allowed := allowedEmails(); allowed != nil && !allowed[strings.ToLower(req.Email)] {
+	allowed := allowedEmails()
+	if allowed != nil && !allowed[strings.ToLower(req.Email)] {
 		writeError(w, http.StatusForbidden, "registration is by invitation only")
 		return
+	}
+	// Emails on the allowlist are trusted — activate immediately.
+	status := "pending"
+	if allowed != nil && allowed[strings.ToLower(req.Email)] {
+		status = "active"
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
@@ -67,12 +73,23 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.authRepo.CreateUser(r.Context(), req.Name, req.Email, string(hash)); err != nil {
+	profile, err := h.authRepo.CreateUser(r.Context(), req.Name, req.Email, string(hash), status)
+	if err != nil {
 		if errors.Is(err, repository.ErrDuplicateEmail) {
 			writeError(w, http.StatusConflict, "email already in use")
 		} else {
 			writeServerError(w, r, err)
 		}
+		return
+	}
+
+	if status == "active" {
+		token, err := auth.GenerateToken(profile.ID)
+		if err != nil {
+			writeServerError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"token": token, "user": profile})
 		return
 	}
 

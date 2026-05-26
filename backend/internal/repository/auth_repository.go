@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -32,7 +33,7 @@ type UserWithPassword struct {
 	AccountStatus string
 }
 
-func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHash string) (*model.UserProfile, error) {
+func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHash, status string) (*model.UserProfile, error) {
 	initials := computeInitials(name)
 
 	tx, err := r.pool.Begin(ctx)
@@ -43,10 +44,10 @@ func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHa
 
 	var p model.UserProfile
 	err = tx.QueryRow(ctx, `
-		INSERT INTO users (email, name, role, initials, password_hash)
-		VALUES ($1, $2, 'learner', $3, $4)
+		INSERT INTO users (email, name, role, initials, password_hash, account_status)
+		VALUES ($1, $2, 'learner', $3, $4, $5)
 		RETURNING id, email, name, role, initials, streak, best_streak, last_active
-	`, email, name, initials, passwordHash).Scan(
+	`, email, name, initials, passwordHash, status).Scan(
 		&p.ID, &p.Email, &p.Name, &p.Role, &p.Initials,
 		&p.Streak, &p.BestStreak, new(any),
 	)
@@ -67,6 +68,18 @@ func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHa
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+
+	// Auto-join starter group if configured and account is active
+	if status == "active" {
+		if groupID := os.Getenv("STARTER_GROUP_ID"); groupID != "" {
+			_, _ = r.pool.Exec(ctx, `
+				INSERT INTO group_members (group_id, user_id, role)
+				VALUES ($1, $2, 'member')
+				ON CONFLICT (group_id, user_id) DO NOTHING
+			`, groupID, p.ID)
+		}
+	}
+
 	return &p, nil
 }
 

@@ -10,6 +10,31 @@ import (
 	"github.com/yourname/koreanapp-backend/internal/service"
 )
 
+// logMastery writes an activity_log entry for every group the user belongs to.
+// Runs in a goroutine — failures are silently ignored so they never affect the review response.
+func (r *SRSRepository) logMastery(cardID, userID string) {
+	ctx := context.Background()
+	var korean string
+	if err := r.pool.QueryRow(ctx, `SELECT korean FROM cards WHERE id = $1`, cardID).Scan(&korean); err != nil {
+		return
+	}
+	rows, err := r.pool.Query(ctx, `SELECT group_id FROM group_members WHERE user_id = $1`, userID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var groupID string
+		if err := rows.Scan(&groupID); err != nil {
+			continue
+		}
+		r.pool.Exec(ctx, `
+			INSERT INTO activity_log (user_id, group_id, kind, subject)
+			VALUES ($1, $2, 'mastered', $3)
+		`, userID, groupID, korean)
+	}
+}
+
 type SRSRepository struct {
 	pool *pgxpool.Pool
 }
@@ -64,6 +89,11 @@ func (r *SRSRepository) Review(ctx context.Context, cardID, userID string, knewI
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// Log mastery the first time a card crosses the mastered threshold (interval_days < 7 → >= 7).
+	if knewIt && intervalDays < 7 && newInterval >= 7 {
+		go r.logMastery(cardID, userID)
 	}
 
 	// Update streak: if last_active was yesterday → streak++, today → no change, older → reset to 1

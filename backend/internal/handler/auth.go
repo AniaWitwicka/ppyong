@@ -62,7 +62,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to process password")
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -74,7 +74,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.GenerateToken(profile.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to generate token")
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -107,7 +107,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.GenerateToken(user.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to generate token")
+		writeServerError(w, r, err)
 		return
 	}
 

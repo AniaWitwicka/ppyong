@@ -18,7 +18,7 @@ func NewCollectionHandler(repo *repository.CollectionRepository) *CollectionHand
 func (h *CollectionHandler) List(w http.ResponseWriter, r *http.Request) {
 	collections, err := h.repo.List(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load collections")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, collections)
@@ -55,7 +55,7 @@ func (h *CollectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := h.repo.Create(r.Context(), userIDFromContext(r), req.Name, req.Emoji, req.Color)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create collection")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, c)
@@ -73,7 +73,7 @@ func (h *CollectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := h.repo.Update(r.Context(), r.PathValue("id"), req.Name, req.Emoji, req.Color)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update collection")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, c)
@@ -81,7 +81,7 @@ func (h *CollectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *CollectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.Delete(r.Context(), r.PathValue("id")); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete collection")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -97,7 +97,7 @@ func (h *CollectionHandler) Share(w http.ResponseWriter, r *http.Request) {
 	}
 	shared, err := h.repo.Share(r.Context(), r.PathValue("id"), req.MemberIDs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to share collection")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, shared)

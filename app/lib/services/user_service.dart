@@ -8,9 +8,14 @@ class UserService {
 
   final _api = ApiService.instance;
 
-  Future<UserProfile> getMe() async {
+  UserProfile? _profileCache;
+  UserProfile? get cachedProfile => _profileCache;
+
+  Future<UserProfile> getMe({bool refresh = false}) async {
+    if (!refresh && _profileCache != null) return _profileCache!;
     final data = await _api.get('/me');
-    return UserProfile.fromJson(data as Map<String, dynamic>);
+    _profileCache = UserProfile.fromJson(data as Map<String, dynamic>);
+    return _profileCache!;
   }
 
   Future<UserStats> getMyStats() async {

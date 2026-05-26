@@ -18,7 +18,7 @@ func NewInviteHandler(repo *repository.InviteRepository) *InviteHandler {
 func (h *InviteHandler) List(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.repo.List(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load invites")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -43,7 +43,7 @@ func (h *InviteHandler) Create(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to send invite")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, inv)
@@ -56,7 +56,7 @@ func (h *InviteHandler) Accept(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to accept invite")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -69,7 +69,7 @@ func (h *InviteHandler) Decline(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to decline invite")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -78,7 +78,7 @@ func (h *InviteHandler) Decline(w http.ResponseWriter, r *http.Request) {
 func (h *InviteHandler) PendingCount(w http.ResponseWriter, r *http.Request) {
 	count, err := h.repo.PendingCount(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get pending count")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"count": count})

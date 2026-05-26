@@ -99,6 +99,7 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         onPressed: () async {
           await showAddFlashcardSheet(context,
               deckId: widget.deckId, deckName: deck.name, cardCount: _cards.length);

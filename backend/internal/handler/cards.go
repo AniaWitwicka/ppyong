@@ -20,7 +20,7 @@ func (h *CardHandler) List(w http.ResponseWriter, r *http.Request) {
 	scope := r.URL.Query().Get("scope") // "due" | "weak" | "" (all)
 	cards, err := h.repo.List(r.Context(), r.PathValue("id"), userIDFromContext(r), scope)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load cards")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, cards)
@@ -43,7 +43,7 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	card, err := h.repo.Create(r.Context(), r.PathValue("id"), req.Korean, req.Romanisation, req.Translation, req.Notes)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create card")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, card)
@@ -62,7 +62,7 @@ func (h *CardHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	card, err := h.repo.Update(r.Context(), r.PathValue("id"), req.Korean, req.Romanisation, req.Translation, req.Notes)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update card")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, card)
@@ -70,7 +70,7 @@ func (h *CardHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *CardHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.Delete(r.Context(), r.PathValue("id")); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete card")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -86,7 +86,7 @@ func (h *CardHandler) Review(w http.ResponseWriter, r *http.Request) {
 	}
 	progress, err := h.srsRepo.Review(r.Context(), r.PathValue("id"), userIDFromContext(r), req.KnewIt)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to record review")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, progress)

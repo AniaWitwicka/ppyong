@@ -41,7 +41,7 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	profile, err := h.repo.Update(r.Context(), userIDFromContext(r), req.Name, req.Email)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update profile")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, profile)
@@ -50,7 +50,7 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) GetMyStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.repo.GetStats(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load stats")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -59,7 +59,7 @@ func (h *UserHandler) GetMyStats(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) GetMySettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.repo.GetSettings(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load settings")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
@@ -76,7 +76,7 @@ func (h *UserHandler) UpdateMySettings(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, err := h.repo.UpdateSettings(r.Context(), userIDFromContext(r), req.NotificationsEnabled, req.StudyReminderTime)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update settings")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
@@ -104,7 +104,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	profile, err := h.repo.Update(r.Context(), id, req.Name, req.Email)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update user")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, profile)
@@ -114,7 +114,7 @@ func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	stats, err := h.repo.GetStats(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load stats")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -124,7 +124,7 @@ func (h *UserHandler) GetUserSettings(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	settings, err := h.repo.GetSettings(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load settings")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
@@ -142,7 +142,7 @@ func (h *UserHandler) UpdateUserSettings(w http.ResponseWriter, r *http.Request)
 	}
 	settings, err := h.repo.UpdateSettings(r.Context(), id, req.NotificationsEnabled, req.StudyReminderTime)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update settings")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
@@ -151,7 +151,7 @@ func (h *UserHandler) UpdateUserSettings(w http.ResponseWriter, r *http.Request)
 func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.repo.List(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list users")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, users)
@@ -160,7 +160,7 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) GetMyWeakCards(w http.ResponseWriter, r *http.Request) {
 	cards, err := h.repo.GetWeakCards(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load weak cards")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, cards)

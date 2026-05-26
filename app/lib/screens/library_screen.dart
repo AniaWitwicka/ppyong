@@ -80,6 +80,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         onPressed: () async {
           await showAddCollectionSheet(context);
           _load();

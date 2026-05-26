@@ -33,6 +33,18 @@ class ApiService {
   Future<dynamic> patch(String path, Map<String, dynamic> body) => _send('PATCH', path, body);
   Future<dynamic> delete(String path) => _send('DELETE', path, null);
 
+  Future<dynamic> postMultipart(String path, List<int> bytes, String filename) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final request = http.MultipartRequest('POST', uri);
+    if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
+    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode >= 400) throw ApiException(response.statusCode, _parseError(response));
+    if (response.body.isEmpty) return null;
+    return jsonDecode(response.body);
+  }
+
   Future<dynamic> _send(String method, String path, Map<String, dynamic>? body) async {
     final uri = Uri.parse('$_baseUrl$path');
     final request = http.Request(method, uri)..headers.addAll(_headers);

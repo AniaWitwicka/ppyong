@@ -18,7 +18,7 @@ func NewFriendHandler(repo *repository.FriendRepository) *FriendHandler {
 func (h *FriendHandler) List(w http.ResponseWriter, r *http.Request) {
 	friends, err := h.repo.List(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load friends")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, friends)
@@ -32,7 +32,7 @@ func (h *FriendHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 	results, err := h.repo.Search(r.Context(), userIDFromContext(r), q)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "search failed")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, results)
@@ -41,7 +41,7 @@ func (h *FriendHandler) Search(w http.ResponseWriter, r *http.Request) {
 func (h *FriendHandler) ListPendingRequests(w http.ResponseWriter, r *http.Request) {
 	requests, err := h.repo.ListPendingRequests(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load friend requests")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, requests)
@@ -60,7 +60,7 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.SendRequest(r.Context(), userIDFromContext(r), req.UserID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to send friend request")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -68,7 +68,7 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 
 func (h *FriendHandler) Accept(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.Accept(r.Context(), r.PathValue("id"), userIDFromContext(r)); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to accept friend request")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -76,7 +76,7 @@ func (h *FriendHandler) Accept(w http.ResponseWriter, r *http.Request) {
 
 func (h *FriendHandler) Decline(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.Decline(r.Context(), r.PathValue("id"), userIDFromContext(r)); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to decline friend request")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -11,9 +11,11 @@ import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_input.dart';
 import '../widgets/app_toast.dart';
 import 'group_detail_screen.dart';
+import 'group_detail_teacher_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
-  const GroupsScreen({super.key});
+  const GroupsScreen({super.key, this.isTeacher = false});
+  final bool isTeacher;
 
   @override
   State<GroupsScreen> createState() => _GroupsScreenState();
@@ -60,6 +62,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       ),
       floatingActionButton: _segment == 0
           ? FloatingActionButton(
+              heroTag: null,
               backgroundColor: AppColors.orange,
               onPressed: _showCreateGroupSheet,
               child: const Icon(Icons.add_rounded, color: Colors.white),
@@ -71,7 +74,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Widget _buildBody() {
     switch (_segment) {
       case 0:
-        return _MyGroupsView(onGroupCreated: _onGroupCreated);
+        return _MyGroupsView(onGroupCreated: _onGroupCreated, isTeacher: widget.isTeacher);
       case 1:
         return const _FriendsView();
       case 2:
@@ -213,8 +216,9 @@ class _SegmentedControl extends StatelessWidget {
 // ── My Groups view ────────────────────────────────────────────────────────
 
 class _MyGroupsView extends StatefulWidget {
-  const _MyGroupsView({required this.onGroupCreated});
+  const _MyGroupsView({required this.onGroupCreated, this.isTeacher = false});
   final VoidCallback onGroupCreated;
+  final bool isTeacher;
 
   @override
   State<_MyGroupsView> createState() => _MyGroupsViewState();
@@ -255,8 +259,15 @@ class _MyGroupsViewState extends State<_MyGroupsView> {
           return _GroupCard(
             group: _groups[i],
             onTap: () async {
-              await Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => GroupDetailScreen(groupId: _groups[i].id)));
+              final id = _groups[i].id;
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => widget.isTeacher
+                      ? GroupDetailTeacherScreen(groupId: id)
+                      : GroupDetailScreen(groupId: id),
+                ),
+              );
               _load();
             },
           );

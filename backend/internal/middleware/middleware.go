@@ -30,22 +30,29 @@ func RequireAuth(next http.Handler) http.Handler {
 }
 
 // CORS allows only origins listed in the ALLOWED_ORIGINS env var (comma-separated).
-// Falls back to localhost:3000 when the env var is unset (local dev only).
+// When unset (local dev), all origins are allowed so any Flutter dev-server port works.
 func CORS(next http.Handler) http.Handler {
 	raw := os.Getenv("ALLOWED_ORIGINS")
-	if raw == "" {
-		raw = "http://localhost:3000"
-	}
-	allowed := map[string]bool{}
-	for _, o := range strings.Split(raw, ",") {
-		if o = strings.TrimSpace(o); o != "" {
-			allowed[o] = true
+	var allowed map[string]bool
+	if raw != "" {
+		allowed = map[string]bool{}
+		for _, o := range strings.Split(raw, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				allowed[o] = true
+			}
 		}
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if allowed[origin] {
+		if allowed == nil {
+			// Dev mode — allow any origin
+			if origin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			}
+		} else if allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
@@ -72,12 +79,17 @@ func MaxBodySize(limit int64) func(http.Handler) http.Handler {
 }
 
 // Logger logs method, path, status code, and duration for every request.
+// 5xx responses are prefixed with ERROR so they stand out in Railway logs.
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rw, r)
-		log.Printf("%s %s → %d (%s)", r.Method, r.URL.Path, rw.status, time.Since(start))
+		if rw.status >= 500 {
+			log.Printf("ERROR %s %s → %d (%s)", r.Method, r.URL.Path, rw.status, time.Since(start))
+		} else {
+			log.Printf("%s %s → %d (%s)", r.Method, r.URL.Path, rw.status, time.Since(start))
+		}
 	})
 }
 

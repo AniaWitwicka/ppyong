@@ -260,6 +260,78 @@ type Friend struct {
 	DueCount     int    `json:"due_count"`
 }
 
+// ── Teacher ───────────────────────────────────────────────────────────────
+
+type ActivityEvent struct {
+	ID        string    `json:"id"`
+	UserName  string    `json:"user_name"`
+	Initials  string    `json:"initials"`
+	Kind      string    `json:"kind"`    // "mastered" | "streak" | "quiz" | "weak"
+	Subject   string    `json:"subject"` // Korean word or deck name
+	Target    string    `json:"target"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type AttentionItem struct {
+	UserID    string `json:"user_id"`
+	Name      string `json:"name"`
+	Initials  string `json:"initials"`
+	Color     string `json:"color"`
+	GroupID   string `json:"group_id"`
+	GroupName string `json:"group_name"`
+	Reason    string `json:"reason"`
+	Severity  string `json:"severity"` // "urgent" | "warn"
+}
+
+type TeacherGroupSummary struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Emoji       string         `json:"emoji"`
+	Color       string         `json:"color"`
+	MemberCount int            `json:"member_count"`
+	DeckCount   int            `json:"deck_count"`
+	LastActive  *time.Time     `json:"last_active"`
+	Avatars     []MemberAvatar `json:"avatars"`
+	ClassAvg    int            `json:"class_avg"`
+}
+
+type StudentRosterItem struct {
+	UserID          string `json:"user_id"`
+	Name            string `json:"name"`
+	Initials        string `json:"initials"`
+	Color           string `json:"color"`
+	Streak          int    `json:"streak"`
+	DueCount        int    `json:"due_count"`
+	ProgressPercent int    `json:"progress_percent"`
+}
+
+type TeacherDashboard struct {
+	ActiveToday    int                   `json:"active_today"`
+	TotalStudents  int                   `json:"total_students"`
+	AvgAccuracy    int                   `json:"avg_accuracy"`
+	DecksAssigned  int                   `json:"decks_assigned"`
+	Attention      []AttentionItem       `json:"attention"`
+	Groups         []TeacherGroupSummary `json:"groups"`
+	RecentActivity []ActivityEvent       `json:"recent_activity"`
+}
+
+// ── Import ────────────────────────────────────────────────────────────────
+
+// ParsedCard is the unit produced by the import parser and accepted by bulk-create.
+type ParsedCard struct {
+	Korean       string `json:"korean"`
+	Translation  string `json:"translation"`
+	Romanisation string `json:"romanisation"`
+	Notes        string `json:"notes"`
+}
+
+// ParseResult is returned by POST /import/preview.
+type ParseResult struct {
+	DetectedFormat string       `json:"detected_format"`
+	ParsedCards    []ParsedCard `json:"parsed_cards"`
+	TotalCount     int          `json:"total_count"`
+}
+
 // ── SRS ───────────────────────────────────────────────────────────────────
 
 type SRSProgress struct {

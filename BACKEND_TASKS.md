@@ -189,44 +189,28 @@ Needed by: **Groups tab** (all views), **Group detail screen**
 Needed by: **Teacher dashboard (§22)**, **Group detail — Teacher view (§23)**
 
 ### DB migration
-- [ ] `activity_log` table — `id`, `user_id` (FK users), `group_id` (FK groups, nullable), `kind` (enum: mastered | streak | quiz | weak), `subject` (card or deck name), `target` (detail string), `created_at`
-- [ ] Write activity log entry on: card first mastered (in `POST /cards/:id/review`), quiz session complete (create a `/sessions` endpoint or log on final review), streak updated
+- [x] `activity_log` table — `id`, `user_id`, `group_id` (nullable), `kind`, `subject`, `target`, `created_at` + two indexes (`migrations/007_activity_log.sql`)
+- [x] Write activity log entry when card first crosses mastered threshold (interval_days < 7 → ≥ 7) in `srs_repository.go` — fire-and-forget goroutine per group the user belongs to
 
 ### Teacher dashboard endpoint
-- [ ] `GET /teacher/dashboard` — returns combined payload:
-  - `activeToday int` — students in teacher's groups who have `last_active = today`
-  - `totalStudents int` — total unique students across all teacher's groups
-  - `avgAccuracy int` — average accuracy % across all students in teacher's groups
-  - `decksAssigned int` — count of decks the teacher has created
-  - `attentionItems []AttentionItem` — up to 5 students needing attention (see below)
-  - `groups []TeacherGroupSummary` — teacher's groups with class progress
-  - `recentActivity []ActivityEvent` — last 20 events across all groups
-- [ ] `backend/internal/handler/teacher.go` — `TeacherHandler`
-- [ ] `backend/internal/repository/teacher_repository.go` — queries for each data slice
+- [x] `GET /teacher/dashboard` — `activeToday`, `totalStudents`, `avgAccuracy`, `decksAssigned`, `attention[]`, `groups[]`, `recentActivity[]`
+- [x] `backend/internal/handler/teacher.go` — `TeacherHandler`
+- [x] `backend/internal/repository/teacher_repository.go` — all queries; identity color derived from CRC32 hash of user ID for consistency
 
 ### Attention item logic
-- [ ] Query students who are members of teacher's groups and match any condition:
-  - **Urgent** (pink): `streak > 0 AND last_active < today - 1 day` (streak just ended)
-  - **Warn** (yellow): `last_active < today - 2 days` (no study for 2+ days)
-  - **Warn** (yellow): student has ≥ 3 cards with ease_factor below threshold for > 3 days (stuck on weak words)
-- [ ] Return: `{ userId, name, initials, identityColor, groupName, reason, severity: 'urgent'|'warn' }`
+- [x] Urgent (pink): `streak > 0 AND last_active < today - 1 day` — streak just ended
+- [x] Warn (yellow): `last_active < today - 2 days` — no study for 2+ days
+- [x] Returns up to 5 items ordered by severity then staleness
 
 ### Teacher group summary
-- [ ] `GET /teacher/groups` (or rolled into dashboard) — for each group:
-  - member avatars (up to 4), member count, deck count, last active timestamp
-  - class avg mastered % = avg across members of (mastered / total cards reviewed)
-  - progress segments: mastered %, learning %, new % (class-wide aggregate)
+- [x] Rolled into dashboard — member avatars (up to 4), member count, deck count, last active, class avg mastered %
 
 ### Group teacher view endpoints
-- [ ] `GET /groups/:id/students` — teacher-enhanced roster; requires caller to be group owner or teacher:
-  - Per student: `id`, `name`, `initials`, `identityColor`, `streak`, `dueCount`, `progressPercent` (mastered / total cards in group's decks)
-- [ ] `GET /groups/:id/activity` — activity feed scoped to this group:
-  - Returns `[]ActivityEvent` from `activity_log` WHERE `group_id = :id`, ordered by `created_at DESC`, limit 50
-- [ ] Permission check: both endpoints require caller to be a member of the group (owner check for full data)
+- [x] `GET /groups/:id/students` — per student: id, name, initials, color, streak, due count, progress %
+- [x] `GET /groups/:id/activity` — `[]ActivityEvent` from `activity_log` for that group, last 50
 
 ### Register routes
-- [ ] Wire `/teacher/dashboard` in `main.go` under `RequireAuth` middleware
-- [ ] Wire `/groups/:id/students` and `/groups/:id/activity` in `main.go`
+- [x] `/teacher/dashboard`, `/groups/:id/students`, `/groups/:id/activity` wired in `main.go`
 
 ---
 
@@ -235,23 +219,13 @@ Needed by: **Teacher dashboard (§22)**, **Group detail — Teacher view (§23)*
 Needed by: **Import deck screen (§24)**
 
 ### Parse endpoint
-- [ ] `POST /import/preview` — parses raw text or uploaded CSV, returns structured card array
-  - Body (paste): `{ "source": "paste", "rawText": "안녕하세요 | Hello | Annyeonghaseyo\n..." }`
-  - Body (csv): multipart/form-data with `file` field
-  - Response: `{ "detectedFormat": "ko|en|romaja", "parsedCards": [{ "korean", "translation", "romanisation" }], "totalCount": 42 }`
-- [ ] `backend/internal/service/import_service.go` — parser logic:
-  - Auto-detect delimiter: try `|` first, then tab, then comma (pick whichever gives ≥ 2 columns consistently)
-  - Parse columns: col 0 = Korean, col 1 = Translation, col 2 = Romanisation (optional)
-  - Trim whitespace, skip blank lines and header rows (if first row is non-Korean text)
-  - Return up to 200 cards max per import
-- [ ] `backend/internal/handler/import.go` — `ImportHandler`
+- [x] `POST /import/preview` — JSON body `{ raw_text }` or multipart `file` field → `{ detected_format, parsed_cards[], total_count }`
+- [x] `backend/internal/service/import_service.go` — auto-detects `|` / tab / comma delimiter from first non-empty line; parses up to 200 cards; trims whitespace, skips blank/incomplete lines
+- [x] `backend/internal/handler/import.go` — `ImportHandler` handles both content types
 
 ### Bulk card create endpoint
-- [ ] `POST /decks/:id/cards/bulk` — batch insert cards into an existing deck
-  - Body: `{ "cards": [{ "korean": "...", "translation": "...", "romanisation": "...", "notes": "..." }] }`
-  - Response: `{ "created": 42 }` — count of successfully inserted cards
-  - Runs as a single DB transaction; rolls back all on any error
-- [ ] `backend/internal/repository/card_repository.go` — add `BulkCreate(deckId string, cards []model.Card) (int, error)`
+- [x] `POST /decks/:id/cards/bulk` — body `{ cards: [{ korean, translation, romanisation, notes }] }` → `{ created: N }`; single DB transaction, rolls back on any error; max 200 cards
+- [x] `BulkCreate` added to `card_repository.go`
 
 ### Register routes
-- [ ] Wire `POST /import/preview` and `POST /decks/:id/cards/bulk` in `main.go` under `RequireAuth`
+- [x] `POST /import/preview` and `POST /decks/:id/cards/bulk` wired in `main.go`

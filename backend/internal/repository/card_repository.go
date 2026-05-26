@@ -8,6 +8,32 @@ import (
 	"github.com/yourname/koreanapp-backend/internal/model"
 )
 
+func (r *CardRepository) BulkCreate(ctx context.Context, deckID string, cards []model.ParsedCard) (int, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	var startPos int
+	tx.QueryRow(ctx, `SELECT COALESCE(MAX(position), 0) FROM cards WHERE deck_id = $1`, deckID).Scan(&startPos)
+
+	for i, card := range cards {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO cards (deck_id, korean, romanisation, translation, notes, position)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, deckID, card.Korean, card.Romanisation, card.Translation, card.Notes, startPos+i+1)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return len(cards), nil
+}
+
 type CardRepository struct {
 	pool *pgxpool.Pool
 }

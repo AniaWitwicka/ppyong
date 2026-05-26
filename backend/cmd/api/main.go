@@ -25,14 +25,17 @@ func main() {
 	defer pool.Close()
 	log.Println("database connected")
 
+	cardRepo          := repository.NewCardRepository(pool)
 	userHandler       := handler.NewUserHandler(repository.NewUserRepository(pool))
 	authHandler       := handler.NewAuthHandler(repository.NewAuthRepository(pool))
 	collectionHandler := handler.NewCollectionHandler(repository.NewCollectionRepository(pool))
 	deckHandler       := handler.NewDeckHandler(repository.NewDeckRepository(pool))
-	cardHandler       := handler.NewCardHandler(repository.NewCardRepository(pool), repository.NewSRSRepository(pool))
+	cardHandler       := handler.NewCardHandler(cardRepo, repository.NewSRSRepository(pool))
 	groupHandler      := handler.NewGroupHandler(repository.NewGroupRepository(pool))
 	inviteHandler     := handler.NewInviteHandler(repository.NewInviteRepository(pool))
 	friendHandler     := handler.NewFriendHandler(repository.NewFriendRepository(pool))
+	teacherHandler    := handler.NewTeacherHandler(repository.NewTeacherRepository(pool))
+	importHandler     := handler.NewImportHandler(cardRepo)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -120,6 +123,15 @@ func main() {
 	mux.HandleFunc("POST /friends/request", auth(friendHandler.SendRequest))
 	mux.HandleFunc("POST /friends/{id}/accept", auth(friendHandler.Accept))
 	mux.HandleFunc("POST /friends/{id}/decline", auth(friendHandler.Decline))
+
+	// Teacher
+	mux.HandleFunc("GET /teacher/dashboard", auth(teacherHandler.Dashboard))
+	mux.HandleFunc("GET /groups/{id}/students", auth(teacherHandler.GroupStudents))
+	mux.HandleFunc("GET /groups/{id}/activity", auth(teacherHandler.GroupActivity))
+
+	// Import
+	mux.Handle("POST /import/preview", auth(importHandler.Preview))
+	mux.HandleFunc("POST /decks/{id}/cards/bulk", auth(importHandler.BulkCreate))
 
 	srv := &http.Server{
 		Addr:    ":" + port,

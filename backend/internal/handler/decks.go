@@ -19,7 +19,7 @@ func NewDeckHandler(repo *repository.DeckRepository) *DeckHandler {
 func (h *DeckHandler) List(w http.ResponseWriter, r *http.Request) {
 	decks, err := h.repo.List(r.Context(), r.PathValue("id"), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load decks")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, decks)
@@ -46,7 +46,7 @@ func (h *DeckHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	deck, err := h.repo.Create(r.Context(), r.PathValue("id"), userIDFromContext(r), req.Name, req.Description)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create deck")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, deck)
@@ -60,7 +60,7 @@ func (h *DeckHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	deck, err := h.repo.Update(r.Context(), r.PathValue("id"), req.Name, req.Description, req.CollectionID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update deck")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, deck)
@@ -68,7 +68,7 @@ func (h *DeckHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *DeckHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.Delete(r.Context(), r.PathValue("id")); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete deck")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -82,7 +82,7 @@ func (h *DeckHandler) Share(w http.ResponseWriter, r *http.Request) {
 	}
 	shared, err := h.repo.Share(r.Context(), r.PathValue("id"), req.MemberIDs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to share deck")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, shared)

@@ -79,6 +79,7 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         onPressed: _showAddDeckSheet,
         backgroundColor: AppColors.orange,
         elevation: 4,

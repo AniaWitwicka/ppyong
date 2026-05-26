@@ -213,7 +213,8 @@ class _LoginFormState extends State<_LoginForm> {
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('login error: $e');
       if (!mounted) return;
       setState(() => _loading = false);
       showAppToast(context,

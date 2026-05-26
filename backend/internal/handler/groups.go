@@ -18,7 +18,7 @@ func NewGroupHandler(repo *repository.GroupRepository) *GroupHandler {
 func (h *GroupHandler) List(w http.ResponseWriter, r *http.Request) {
 	groups, err := h.repo.List(r.Context(), userIDFromContext(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load groups")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, groups)
@@ -64,7 +64,7 @@ func (h *GroupHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	g, err := h.repo.Create(r.Context(), userIDFromContext(r), req.Name, req.Emoji, req.Color)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create group")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, g)
@@ -92,7 +92,7 @@ func (h *GroupHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	g, err := h.repo.Update(r.Context(), groupID, req.Name, req.Emoji, req.Color)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update group")
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, g)
@@ -109,7 +109,7 @@ func (h *GroupHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.Delete(r.Context(), groupID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete group")
+		writeServerError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

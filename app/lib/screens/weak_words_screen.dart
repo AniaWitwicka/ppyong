@@ -3,6 +3,7 @@ import '../models/weak_card.dart';
 import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/app_error_body.dart';
 
 class WeakWordsScreen extends StatefulWidget {
   const WeakWordsScreen({super.key});
@@ -55,28 +56,7 @@ class _WeakWordsScreenState extends State<WeakWordsScreen> {
       return const Center(child: CircularProgressIndicator(color: AppColors.periwinkle));
     }
     if (_hasError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('😕', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 16),
-            const Text('Could not load weak words',
-                style: TextStyle(color: AppColors.ash, fontSize: 16)),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: _load,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: const BoxDecoration(
-                    color: AppColors.periwinkle, borderRadius: AppRadius.pill),
-                child: const Text('Try again',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      );
+      return AppErrorBody(message: 'Could not load weak words', onRetry: _load);
     }
     if (_cards.isEmpty) {
       return const Center(

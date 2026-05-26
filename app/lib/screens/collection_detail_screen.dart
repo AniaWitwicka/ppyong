@@ -6,6 +6,7 @@ import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_input.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_share_dialog.dart';
+import '../widgets/app_error_body.dart';
 import 'deck_detail_screen.dart';
 
 class CollectionDetailScreen extends StatefulWidget {
@@ -108,28 +109,7 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
     }
 
     if (_hasError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('😕', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 16),
-            const Text('Could not load decks',
-                style: TextStyle(color: AppColors.ash, fontSize: 16)),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: _load,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: const BoxDecoration(
-                    color: AppColors.periwinkle, borderRadius: AppRadius.pill),
-                child: const Text('Try again',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      );
+      return AppErrorBody(message: 'Could not load decks', onRetry: _load);
     }
 
     if (_decks.isEmpty) {

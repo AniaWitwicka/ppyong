@@ -7,6 +7,7 @@ import '../services/group_service.dart';
 import '../services/teacher_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/app_error_body.dart';
 
 Color _hexColor(String hex) {
   final clean = hex.replaceFirst('#', '');
@@ -76,7 +77,7 @@ class _GroupDetailTeacherScreenState extends State<GroupDetailTeacherScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: AppColors.forestGreen))
             : _hasError
-                ? _ErrorBody(onRetry: _load)
+                ? AppErrorBody(message: 'Could not load group', onRetry: _load)
                 : Column(
                     children: [
                       _TeacherGroupHeader(
@@ -644,36 +645,3 @@ class _ActivityRow extends StatelessWidget {
 
 // ── Error body ────────────────────────────────────────────────────────────────
 
-class _ErrorBody extends StatelessWidget {
-  const _ErrorBody({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('😕', style: TextStyle(fontSize: 48)),
-          const SizedBox(height: 16),
-          const Text('Could not load group', style: TextStyle(color: AppColors.ash, fontSize: 16)),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: onRetry,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: const BoxDecoration(
-                color: AppColors.forestGreen,
-                borderRadius: AppRadius.pill,
-              ),
-              child: const Text(
-                'Try again',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

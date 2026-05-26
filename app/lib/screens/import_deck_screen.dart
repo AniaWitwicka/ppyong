@@ -627,30 +627,28 @@ class _SheetContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Google Sheets URL',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border, width: 1.5),
+    return Opacity(
+      opacity: 0.5,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.fog.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Text('Coming soon', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ash)),
           ),
-          child: const Text(
-            'https://docs.google.com/spreadsheets/...',
-            style: TextStyle(fontSize: 13, color: AppColors.fog),
+          const SizedBox(height: 16),
+          const Text(
+            'Google Sheets import\nis not available yet.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: AppColors.ash, height: 1.5),
           ),
-        ),
-        const SizedBox(height: 12),
-        const Text('Google Sheets import coming soon.', style: TextStyle(fontSize: 12, color: AppColors.ash)),
-      ],
+        ],
+      ),
     );
   }
 }

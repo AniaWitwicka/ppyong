@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_input.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/app_error_body.dart';
 import 'flashcard_study_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
@@ -114,7 +115,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: AppColors.bubblegum))
             : _hasError
-                ? _ErrorBody(onRetry: _load)
+                ? AppErrorBody(message: 'Could not load group', onRetry: _load)
                 : _Body(
                     group: _group!,
                     onInvite: _showInviteSheet,
@@ -895,32 +896,3 @@ class _UserResult {
       );
 }
 
-// ── Error body ────────────────────────────────────────────────────────────
-
-class _ErrorBody extends StatelessWidget {
-  const _ErrorBody({required this.onRetry});
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Text('😕', style: TextStyle(fontSize: 48)),
-        const SizedBox(height: 16),
-        const Text('Could not load group',
-            style: TextStyle(color: AppColors.ash, fontSize: 16)),
-        const SizedBox(height: 16),
-        GestureDetector(
-          onTap: onRetry,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: const BoxDecoration(
-                color: AppColors.bubblegum, borderRadius: AppRadius.pill),
-            child: const Text('Try again',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
-        ),
-      ]),
-    );
-  }
-}

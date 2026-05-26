@@ -8,6 +8,7 @@ import '../widgets/app_toast.dart';
 import '../widgets/edit_deck_sheet.dart';
 import '../widgets/add_flashcard_sheet.dart';
 import '../widgets/deck_share_dialog.dart';
+import '../widgets/app_error_body.dart';
 import 'flashcard_study_screen.dart';
 import 'multiple_choice_screen.dart';
 
@@ -69,28 +70,7 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
     if (_hasError || _deck == null) {
       return Scaffold(
         backgroundColor: AppColors.offWhite,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('😕', style: TextStyle(fontSize: 48)),
-              const SizedBox(height: 16),
-              const Text('Could not load deck',
-                  style: TextStyle(color: AppColors.ash, fontSize: 16)),
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: _load,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: const BoxDecoration(
-                      color: AppColors.periwinkle, borderRadius: AppRadius.pill),
-                  child: const Text('Try again',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
-        ),
+        body: AppErrorBody(message: 'Could not load deck', onRetry: _load),
       );
     }
 

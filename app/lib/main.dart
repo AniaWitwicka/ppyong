@@ -3,6 +3,7 @@ import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'widgets/squiggle_background.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,23 @@ class PpyongApp extends StatelessWidget {
     return MaterialApp(
       title: '뿅',
       theme: AppTheme.light,
+      builder: (context, child) => Container(
+        color: const Color(0xFFECE8E1),
+        child: SquiggleBackground(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFFDF9),
+                  borderRadius: BorderRadius.all(Radius.circular(24)),
+                ),
+                child: child!,
+              ),
+            ),
+          ),
+        ),
+      ),
       home: AuthService.instance.isLoggedIn
           ? const HomeScreen()
           : const LoginScreen(),

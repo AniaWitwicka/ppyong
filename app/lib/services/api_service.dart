@@ -15,7 +15,10 @@ class ApiService {
   static final ApiService instance = ApiService._();
 
   // Switch to your deployed URL for production.
-  static const _baseUrl = 'https://ppyong-production.up.railway.app';
+  static const _baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'http://localhost:8080',
+  );
 
   // Set after login, cleared on sign-out.
   String? _token;

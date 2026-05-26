@@ -75,7 +75,7 @@ func (r *SRSRepository) Review(ctx context.Context, cardID, userID string, knewI
 		INSERT INTO srs_progress
 			(user_id, card_id, ease_factor, interval_days, repetitions, due_date, last_reviewed)
 		VALUES
-			($1, $2, $3, $4, $5, CURRENT_DATE + ($4 * INTERVAL '1 day'), NOW())
+			($1, $2, $3, $4, $5, CURRENT_DATE + ($4::int * INTERVAL '1 day'), NOW())
 		ON CONFLICT (user_id, card_id) DO UPDATE SET
 			ease_factor   = EXCLUDED.ease_factor,
 			interval_days = EXCLUDED.interval_days,

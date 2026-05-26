@@ -25,12 +25,14 @@ class PpyongApp extends StatelessWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 600),
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFFDF9),
-                  borderRadius: BorderRadius.all(Radius.circular(24)),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.all(Radius.circular(24)),
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFFDF9),
+                  ),
+                  child: child!,
                 ),
-                child: child!,
               ),
             ),
           ),

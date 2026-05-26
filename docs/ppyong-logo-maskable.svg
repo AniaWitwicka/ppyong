@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Full bleed green background for maskable (safe zone is inner 80%) -->
+  <rect width="512" height="512" fill="#267F53"/>
+  <!-- Squircle centered, smaller to fit safe zone -->
+  <rect x="76" y="76" width="360" height="360" rx="80" ry="80" fill="#1e6642"/>
+  <text
+    x="256"
+    y="318"
+    font-family="Apple SD Gothic Neo, Noto Sans KR, sans-serif"
+    font-size="190"
+    font-weight="700"
+    text-anchor="middle"
+    fill="#E8F5EE"
+  >뿅</text>
+</svg>

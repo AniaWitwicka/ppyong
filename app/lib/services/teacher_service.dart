@@ -18,12 +18,12 @@ class TeacherService {
   void prefetch() => getDashboard();
 
   Future<List<StudentRosterItem>> getGroupStudents(String groupId) async {
-    final data = await ApiService.instance.get('/teacher/groups/$groupId/students');
+    final data = await ApiService.instance.get('/groups/$groupId/students');
     return (data as List).map((e) => StudentRosterItem.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<ActivityEvent>> getGroupActivity(String groupId) async {
-    final data = await ApiService.instance.get('/teacher/groups/$groupId/activity');
+    final data = await ApiService.instance.get('/groups/$groupId/activity');
     return (data as List).map((e) => ActivityEvent.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

@@ -2,12 +2,21 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/yourname/koreanapp-backend/internal/model"
 )
+
+var ErrDuplicateEmail = errors.New("email already in use")
+
+func isDuplicateEmail(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
 
 type AuthRepository struct {
 	pool *pgxpool.Pool
@@ -42,6 +51,9 @@ func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHa
 		&p.Streak, &p.BestStreak, new(any),
 	)
 	if err != nil {
+		if isDuplicateEmail(err) {
+			return nil, ErrDuplicateEmail
+		}
 		return nil, err
 	}
 

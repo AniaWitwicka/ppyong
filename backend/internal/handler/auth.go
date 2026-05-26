@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -67,7 +68,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.authRepo.CreateUser(r.Context(), req.Name, req.Email, string(hash)); err != nil {
-		writeError(w, http.StatusConflict, "email already in use")
+		if errors.Is(err, repository.ErrDuplicateEmail) {
+			writeError(w, http.StatusConflict, "email already in use")
+		} else {
+			writeServerError(w, r, err)
+		}
 		return
 	}
 

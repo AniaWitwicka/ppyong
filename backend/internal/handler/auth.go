@@ -105,6 +105,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.AccountStatus != "active" {
+		writeError(w, http.StatusForbidden, "your account is pending approval — the admin will activate it shortly")
+		return
+	}
+
 	token, err := auth.GenerateToken(user.ID)
 	if err != nil {
 		writeServerError(w, r, err)

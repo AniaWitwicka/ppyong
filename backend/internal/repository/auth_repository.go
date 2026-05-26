@@ -18,8 +18,9 @@ func NewAuthRepository(pool *pgxpool.Pool) *AuthRepository {
 }
 
 type UserWithPassword struct {
-	ID           string
-	PasswordHash string
+	ID            string
+	PasswordHash  string
+	AccountStatus string
 }
 
 func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHash string) (*model.UserProfile, error) {
@@ -60,8 +61,8 @@ func (r *AuthRepository) CreateUser(ctx context.Context, name, email, passwordHa
 func (r *AuthRepository) GetByEmail(ctx context.Context, email string) (*UserWithPassword, error) {
 	var u UserWithPassword
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, password_hash FROM users WHERE email = $1
-	`, email).Scan(&u.ID, &u.PasswordHash)
+		SELECT id, password_hash, account_status FROM users WHERE email = $1
+	`, email).Scan(&u.ID, &u.PasswordHash, &u.AccountStatus)
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(flutter build *)",
-      "Bash(vercel --version)"
+      "Bash(vercel --version)",
+      "Bash(vercel --prod)"
     ]
   }
 }

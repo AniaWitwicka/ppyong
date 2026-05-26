@@ -67,15 +67,35 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_userId.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('activeRole_$_userId', role);
-    if (mounted) setState(() => _activeRole = role);
+    if (mounted) {
+      int newIndex = _navIndex;
+      final wasTeacher = _activeRole == 'teacher';
+      final becomeTeacher = role == 'teacher';
+      if (!wasTeacher && becomeTeacher) {
+        // student→teacher: Learn tab removed — if on Learn go Home, else shift down
+        if (_navIndex == 1) { newIndex = 0; }
+        else if (_navIndex > 1) { newIndex = _navIndex - 1; }
+      } else if (wasTeacher && !becomeTeacher) {
+        // teacher→student: Learn tab added back — shift up (Home stays 0)
+        if (_navIndex > 0) { newIndex = _navIndex + 1; }
+      }
+      setState(() {
+        _activeRole = role;
+        _navIndex = newIndex;
+      });
+    }
   }
 
   bool get _isTeacher => _userRole == 'teacher' || _userRole == 'admin';
+  bool get _isTeacherMode => _isTeacher && _activeRole == 'teacher';
+
+  // Tab indices shift when teacher mode hides the Learn tab
+  int get _groupsIndex => _isTeacherMode ? 2 : 3;
+  int get _libraryIndex => _isTeacherMode ? 1 : 2;
 
   void _onTabTap(int i) {
     if (i == 0 && _navIndex != 0) _homeRefreshKey++;
-    // Refresh badge when leaving Groups tab
-    if (_navIndex == 3 && i != 3) _loadGroupsBadge();
+    if (_navIndex == _groupsIndex && i != _groupsIndex) _loadGroupsBadge();
     setState(() => _navIndex = i);
   }
 
@@ -102,9 +122,9 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _navIndex,
         children: [
           _homeContent,
-          const LearnScreen(),
+          if (!_isTeacherMode) const LearnScreen(),
           const LibraryScreen(),
-          GroupsScreen(isTeacher: _isTeacher),
+          GroupsScreen(isTeacher: _isTeacher && _activeRole == 'teacher'),
           const ProfileScreen(),
         ],
       ),
@@ -112,6 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _navIndex,
         onTap: _onTabTap,
         groupsBadge: _groupsBadge,
+        isTeacherMode: _isTeacherMode,
       ),
     );
   }
@@ -153,9 +174,10 @@ class _HomeTab extends StatelessWidget {
                     children: [
                       const _SectionLabel('Your collections'),
                       GestureDetector(
-                        onTap: () => context
-                            .findAncestorStateOfType<_HomeScreenState>()!
-                            ._onTabTap(2),
+                        onTap: () {
+                          final s = context.findAncestorStateOfType<_HomeScreenState>()!;
+                          s._onTabTap(s._libraryIndex);
+                        },
                         child: Text(
                           'See all',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -510,7 +532,8 @@ class _ResumeCardState extends State<_ResumeCard> {
           );
         } else {
           // No deck studied yet — send to Library to pick one
-          context.findAncestorStateOfType<_HomeScreenState>()!._onTabTap(2);
+          final s = context.findAncestorStateOfType<_HomeScreenState>()!;
+          s._onTabTap(s._libraryIndex);
         }
       },
       child: Container(
@@ -742,22 +765,28 @@ class _BottomNav extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
     this.groupsBadge = 0,
+    this.isTeacherMode = false,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
   final int groupsBadge;
+  final bool isTeacherMode;
 
   @override
   Widget build(BuildContext context) {
-    // Tab indices: 0=Home, 1=Learn, 2=Library, 3=Groups, 4=Profile
-    const tabs = [
+    // Teacher: 0=Home, 1=Library, 2=Groups, 3=Profile
+    // Student: 0=Home, 1=Learn, 2=Library, 3=Groups, 4=Profile
+    final tabs = [
       (icon: Icons.home_rounded, label: 'Home', activeColor: AppColors.periwinkle),
-      (icon: Icons.school_rounded, label: 'Learn', activeColor: AppColors.periwinkle),
+      if (!isTeacherMode)
+        (icon: Icons.school_rounded, label: 'Learn', activeColor: AppColors.periwinkle),
       (icon: Icons.library_books_rounded, label: 'Library', activeColor: AppColors.periwinkle),
       (icon: Icons.group_rounded, label: 'Groups', activeColor: AppColors.bubblegum),
       (icon: Icons.person_rounded, label: 'Profile', activeColor: AppColors.sunnyYellow),
     ];
+
+    final groupsTabIndex = isTeacherMode ? 2 : 3;
 
     return BottomNavigationBar(
       currentIndex: currentIndex,
@@ -772,7 +801,7 @@ class _BottomNav extends StatelessWidget {
         final i = e.key;
         final tab = e.value;
         Widget icon = Icon(tab.icon, size: 22);
-        if (i == 3 && groupsBadge > 0) {
+        if (i == groupsTabIndex && groupsBadge > 0) {
           icon = Stack(
             clipBehavior: Clip.none,
             children: [

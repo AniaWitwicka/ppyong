@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/card.dart';
 import '../models/collection.dart';
 import '../models/deck.dart';
+import '../models/study_queue.dart';
 import '../services/card_service.dart';
 import '../services/collection_service.dart';
 import '../services/deck_service.dart';
@@ -15,10 +16,23 @@ enum _Scope { all, due, weak }
 enum _Phase { pick, study, complete }
 
 class FlashcardStudyScreen extends StatefulWidget {
-  const FlashcardStudyScreen({super.key, this.deckName, this.deckId, this.isTab = false});
+  const FlashcardStudyScreen({
+    super.key,
+    this.deckName,
+    this.deckId,
+    this.isTab = false,
+    this.loadCards,
+    this.reviewCard,
+  });
   final String? deckName;
   final String? deckId;
   final bool isTab;
+
+  /// Test hooks: default to the API. `scope` is '' (all), 'due' or 'weak'.
+  @visibleForTesting
+  final Future<List<CardModel>> Function(String deckId, String scope)? loadCards;
+  @visibleForTesting
+  final Future<void> Function(String cardId, bool knewIt)? reviewCard;
 
   @override
   State<FlashcardStudyScreen> createState() => _FlashcardStudyScreenState();
@@ -32,7 +46,10 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   String? _deckId;
   String? _deckName;
 
+  /// Cards of the current session (a slice of [_queue]).
   List<CardModel> _cards = [];
+  StudyQueue? _queue;
+  int _sessionSize = StudyQueue.defaultSize;
   int _index = 0;
   int _knewIt = 0;
   int _again = 0;
@@ -50,7 +67,37 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
     _deckId = widget.deckId;
     _deckName = widget.deckName;
     if (_deckId != null) _loadCounts();
+    _loadSessionSize();
   }
+
+  Future<List<CardModel>> _load(String deckId, String scope) =>
+      widget.loadCards?.call(deckId, scope) ??
+      CardService.instance.listCards(deckId, scope: scope);
+
+  static const _sessionSizeKey = 'study_session_size';
+
+  Future<void> _loadSessionSize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt(_sessionSizeKey);
+      if (saved != null && StudyQueue.sizes.contains(saved) && mounted) {
+        setState(() => _sessionSize = saved);
+      }
+    } catch (_) {}
+  }
+
+  void _onSessionSizeChanged(int size) {
+    setState(() => _sessionSize = size);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setInt(_sessionSizeKey, size))
+        .catchError((_) => false);
+  }
+
+  int get _scopeCount => switch (_scope) {
+        _Scope.all => _totalCount,
+        _Scope.due => _dueCount,
+        _Scope.weak => _weakCount,
+      };
 
   void _onDeckSelected(String id, String name) {
     setState(() {
@@ -63,9 +110,9 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   Future<void> _loadCounts() async {
     try {
       final results = await Future.wait([
-        CardService.instance.listCards(_deckId!),
-        CardService.instance.listCards(_deckId!, scope: 'due'),
-        CardService.instance.listCards(_deckId!, scope: 'weak'),
+        _load(_deckId!, ''),
+        _load(_deckId!, 'due'),
+        _load(_deckId!, 'weak'),
       ]);
       if (mounted) {
         setState(() {
@@ -89,15 +136,23 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
           : _scope == _Scope.weak
               ? 'weak'
               : '';
-      final cards = await CardService.instance.listCards(_deckId!, scope: scope);
+      final cards = await _load(_deckId!, scope);
       if (!mounted) return;
       if (cards.isNotEmpty) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('last_deck_id', _deckId!);
         await prefs.setString('last_deck_name', _deckName ?? '');
       }
+      final queue = StudyQueue(
+        cards,
+        sessionSize: _sessionSize == 0 ? cards.length.clamp(1, 1 << 30) : _sessionSize,
+      );
       setState(() {
-        _cards = cards;
+        _queue = queue;
+        _cards = queue.session;
+        _index = 0;
+        _knewIt = 0;
+        _again = 0;
         _loadingCards = false;
         _phase = cards.isEmpty ? _Phase.complete : _Phase.study;
       });
@@ -109,7 +164,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   void _answer(bool knew) {
     final card = _cards.isNotEmpty ? _cards[_index] : null;
     if (card != null) {
-      CardService.instance.reviewCard(card.id, knew).catchError((_) {
+      (widget.reviewCard ?? CardService.instance.reviewCard)(card.id, knew).catchError((_) {
         if (mounted) {
           showAppToast(context, variant: ToastVariant.error, title: 'Review sync failed');
         }
@@ -132,8 +187,23 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
       _knewIt = 0;
       _again = 0;
       _cards = [];
+      _queue = null;
     });
     if (_deckId != null) _loadCounts();
+  }
+
+  /// Continues with the next slice of the same queue — no repeats this sitting.
+  void _nextSession() {
+    final queue = _queue;
+    if (queue == null || !queue.hasNextSession) return;
+    queue.nextSession();
+    setState(() {
+      _cards = queue.session;
+      _index = 0;
+      _knewIt = 0;
+      _again = 0;
+      _phase = _Phase.study;
+    });
   }
 
   @override
@@ -152,6 +222,9 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
         scope: _scope,
         onDirectionChanged: (d) => setState(() => _direction = d),
         onScopeChanged: (s) => setState(() => _scope = s),
+        sessionSize: _sessionSize,
+        onSessionSizeChanged: _onSessionSizeChanged,
+        scopeCount: _scopeCount,
         onStart: _startStudy,
         loading: _loadingCards,
         totalCount: _totalCount,
@@ -161,11 +234,17 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
     }
 
     if (_phase == _Phase.complete) {
+      final queue = _queue;
       return _SessionComplete(
         deckName: _deckName,
         knewIt: _knewIt,
         again: _again,
         total: _cards.isNotEmpty ? _cards.length : 0,
+        sessionNumber: queue?.sessionNumber ?? 1,
+        sessionCount: queue?.sessionCount ?? 1,
+        wordsLeft: queue?.remainingAfterSession ?? 0,
+        nextSessionSize: queue?.nextSessionSize ?? 0,
+        onNextSession: _nextSession,
         onRestart: _restart,
         isTab: _isTab,
       );
@@ -544,6 +623,9 @@ class _DirectionPickerScreen extends StatelessWidget {
     required this.scope,
     required this.onDirectionChanged,
     required this.onScopeChanged,
+    required this.sessionSize,
+    required this.onSessionSizeChanged,
+    required this.scopeCount,
     required this.onStart,
     required this.loading,
     required this.totalCount,
@@ -556,6 +638,19 @@ class _DirectionPickerScreen extends StatelessWidget {
   final _Scope scope;
   final ValueChanged<_Direction> onDirectionChanged;
   final ValueChanged<_Scope> onScopeChanged;
+  final int sessionSize; // 0 = whole deck
+  final ValueChanged<int> onSessionSizeChanged;
+  final int scopeCount; // cards in the chosen scope
+
+  /// e.g. "61 cards → 4 sessions of up to 20" or "All 61 cards in one go".
+  String _sessionHint() {
+    if (scopeCount == 0) return 'No cards to study here yet';
+    if (sessionSize == 0 || sessionSize >= scopeCount) {
+      return 'All $scopeCount card${scopeCount == 1 ? '' : 's'} in one go';
+    }
+    final sessions = (scopeCount / sessionSize).ceil();
+    return '$scopeCount cards → $sessions sessions of up to $sessionSize';
+  }
   final VoidCallback onStart;
   final bool loading;
   final int totalCount;
@@ -642,6 +737,24 @@ class _DirectionPickerScreen extends StatelessWidget {
                       dueCount: dueCount,
                       weakCount: weakCount,
                     ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Words per session',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 12),
+                    _SessionSizePills(size: sessionSize, onChanged: onSessionSizeChanged),
+                    const SizedBox(height: 10),
+                    Text(
+                      _sessionHint(),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: AppColors.ash),
+                    ),
                   ],
                 ),
               ),
@@ -676,6 +789,45 @@ class _DirectionPickerScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SessionSizePills extends StatelessWidget {
+  const _SessionSizePills({required this.size, required this.onChanged});
+  final int size;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final value in StudyQueue.sizes)
+          GestureDetector(
+            onTap: () => onChanged(value),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                color: size == value ? AppColors.periwinkle : Colors.white,
+                borderRadius: AppRadius.pill,
+                border: Border.all(
+                  color: size == value ? AppColors.periwinkle : AppColors.fog.withOpacity(0.5),
+                ),
+              ),
+              child: Text(
+                value == 0 ? 'All' : '$value',
+                style: TextStyle(
+                  color: size == value ? Colors.white : AppColors.ash,
+                  fontSize: 14,
+                  fontWeight: size == value ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -721,12 +873,14 @@ class _DirectionOption extends StatelessWidget {
                   : null,
             ),
             const SizedBox(width: 14),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+              ),
             ),
           ],
         ),
@@ -1379,6 +1533,11 @@ class _SessionComplete extends StatelessWidget {
     required this.knewIt,
     required this.again,
     required this.total,
+    required this.sessionNumber,
+    required this.sessionCount,
+    required this.wordsLeft,
+    required this.nextSessionSize,
+    required this.onNextSession,
     required this.onRestart,
     required this.isTab,
   });
@@ -1387,11 +1546,24 @@ class _SessionComplete extends StatelessWidget {
   final int knewIt;
   final int again;
   final int total;
+  final int sessionNumber;
+  final int sessionCount;
+
+  /// Words in this deck/scope not yet covered this sitting.
+  final int wordsLeft;
+  final int nextSessionSize;
+  final VoidCallback onNextSession;
   final VoidCallback onRestart;
   final bool isTab;
 
   @override
   Widget build(BuildContext context) {
+    final hasNext = wordsLeft > 0;
+    final subtitle = [
+      if (deckName != null) deckName!,
+      if (sessionCount > 1) 'Session $sessionNumber of $sessionCount',
+    ].join(' · ');
+
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       body: SafeArea(
@@ -1412,13 +1584,14 @@ class _SessionComplete extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                'Session complete!',
+                hasNext || sessionCount == 1 ? 'Session complete!' : 'All sessions done!',
                 style: Theme.of(context).textTheme.displayMedium,
               ),
-              if (deckName != null) ...[
+              if (subtitle.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
-                  deckName!,
+                  subtitle,
+                  textAlign: TextAlign.center,
                   style: Theme.of(context)
                       .textTheme
                       .bodyMedium
@@ -1447,9 +1620,19 @@ class _SessionComplete extends StatelessWidget {
                   ),
                 ],
               ),
+              if (hasNext) ...[
+                const SizedBox(height: 20),
+                Text(
+                  '$wordsLeft word${wordsLeft == 1 ? '' : 's'} left to go',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AppColors.ash),
+                ),
+              ],
               const SizedBox(height: 36),
               GestureDetector(
-                onTap: onRestart,
+                onTap: hasNext ? onNextSession : onRestart,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1459,7 +1642,9 @@ class _SessionComplete extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    'Study again',
+                    hasNext
+                        ? 'Next $nextSessionSize word${nextSessionSize == 1 ? '' : 's'}'
+                        : 'Study again',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -1468,10 +1653,10 @@ class _SessionComplete extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!isTab) ...[
+              if (!isTab || hasNext) ...[
                 const SizedBox(height: 12),
                 GestureDetector(
-                  onTap: () => Navigator.pop(context),
+                  onTap: isTab ? onRestart : () => Navigator.pop(context),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1481,7 +1666,7 @@ class _SessionComplete extends StatelessWidget {
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      'Back to deck',
+                      hasNext ? 'Done for now' : 'Back to deck',
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                             color: AppColors.periwinkle,
                             fontWeight: FontWeight.w700,

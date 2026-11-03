@@ -1068,3 +1068,24 @@ Deck picker (shared with Multiple choice, bubblegum header) → Setup → Board 
 ### Entry points
 - Learn tab: Matching card is now active (tags "Timed" · "Pairs")
 - Deck detail: "Match" button (bubblegum outline) next to "Multiple choice"; "Preview cards" moves to its own full-width row below
+
+---
+
+## 22. Short study sessions (flashcards)
+
+### Setup screen (addition)
+- New section **"Words per session"** under Scope: pills 10 · 15 · 20 · All (same style as the scope pills; default 20, remembered on the device)
+- Hint under the pills (13px, ash): "61 cards → 4 sessions of up to 20" or "All 4 cards in one go"
+
+### Order of words
+Due reviews first, then new words, then words still being learned, then mastered — keeping deck order inside each group. "Next" continues with the following slice, so a word is never repeated in the same sitting.
+
+### During a session
+Progress bar and counter count the session ("5/20"), not the whole deck.
+
+### End of session
+- "Session complete!" + "<deck> · Session 1 of 4"
+- Knew it / Again result cards (this session only)
+- "41 words left to go" (13px, ash)
+- **Next 20 words** (orange pill) · **Done for now** (periwinkle tint) — goes back to the deck
+- After the last session: "All sessions done!" · **Study again** · **Back to deck**

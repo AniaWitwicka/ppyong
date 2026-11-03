@@ -179,8 +179,8 @@ Needed by: **Groups tab** (all views), **Group detail screen**
 
 ## 9. PWA / backend deploy
 
-- [ ] Railway deploy config (`Dockerfile` or `railway.json`)
-- [ ] Environment variables set on Railway (`DATABASE_URL`, `JWT_SECRET`, `ALLOWED_ORIGINS`)
+- [x] Railway deploy config (`Dockerfile` + `railway.json`)
+- [x] Environment variables set on Railway (`DATABASE_URL`, `JWT_SECRET`, `ALLOWED_ORIGINS`, `ALLOWED_EMAILS`, `STARTER_GROUP_ID`)
 
 ---
 
@@ -229,3 +229,13 @@ Needed by: **Import deck screen (§24)**
 
 ### Register routes
 - [x] `POST /import/preview` and `POST /decks/:id/cards/bulk` wired in `main.go`
+
+---
+
+## 12. Security & hardening
+
+- [ ] Trim + lowercase email on register and login (phone keyboards add trailing spaces / capitals; invites match email exactly)
+- [ ] `PATCH /users/{id}` and `PATCH /users/{id}/settings` — only allow editing your own user (currently any logged-in user can edit anyone)
+- [ ] Teacher endpoints — require role `teacher`/`admin`; `/groups/{id}/students` and `/groups/{id}/activity` only for the group owner
+- [ ] Deck/collection sharing is a no-op (`Share` only returns users) — add a share table, or create `srs_progress` rows for shared members (see `import/chikas_share.sql`)
+- [ ] Limit the DB pool (`pool_max_conns=5` in `DATABASE_URL` on Railway) — the backend holds all 15 Supabase session-pooler connections

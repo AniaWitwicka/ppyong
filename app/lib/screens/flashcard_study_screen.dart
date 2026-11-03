@@ -1145,7 +1145,8 @@ class _CardFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showKorean = (direction == _Direction.krToEn) == isFront;
+    // Whether the front shows Korean; _BackContent shows the other side.
+    final showKorean = direction == _Direction.krToEn;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -1192,7 +1193,7 @@ class _FrontContent extends StatelessWidget {
             borderRadius: AppRadius.pill,
           ),
           child: Text(
-            showKorean ? 'Korean' : 'English',
+            showKorean ? 'Korean' : 'Translation',
             style: const TextStyle(
               color: AppColors.periwinkle,
               fontSize: 13,
@@ -1254,7 +1255,7 @@ class _BackContent extends StatelessWidget {
             borderRadius: AppRadius.pill,
           ),
           child: Text(
-            showKorean ? 'English' : 'Korean',
+            showKorean ? 'Translation' : 'Korean',
             style: const TextStyle(
               color: AppColors.orange,
               fontSize: 13,

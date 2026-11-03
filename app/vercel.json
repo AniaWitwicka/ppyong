@@ -1,5 +1,5 @@
 {
-  "buildCommand": "flutter/bin/flutter build web --release",
+  "buildCommand": "flutter/bin/flutter build web --release --dart-define=API_URL=https://ppyong-production.up.railway.app",
   "outputDirectory": "build/web",
-  "installCommand": "git clone https://github.com/flutter/flutter.git || true"
+  "installCommand": "git clone --depth 1 -b stable https://github.com/flutter/flutter.git || true"
 }

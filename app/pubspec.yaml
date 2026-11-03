@@ -37,6 +37,7 @@ dependencies:
   shared_preferences: ^2.2.0
   provider: ^6.1.0
   file_picker: ^8.0.0
+  clock: ^1.1.2 # testable stopwatch for the matching game timer
 
 dev_dependencies:
   flutter_test:

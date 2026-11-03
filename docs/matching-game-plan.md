@@ -1,6 +1,6 @@
 # Matching game — implementation plan
 
-Status: plan, not started. Replaces the "Matching — coming soon" card on the Learn tab.
+Status: phases 1–3 built and tested locally on `feat/matching-game`; not released. Replaces the "Matching — coming soon" card on the Learn tab.
 
 ## The game
 
@@ -68,7 +68,7 @@ Identity colour: **Bubblegum `#F296BD`** (already used for the Matching card on 
 ### Phase 2 — tests and release
 
 7. **Unit tests** — `app/test/match_game_test.dart`: dealing never repeats a card; never two equal translations on one board; correct/wrong pair handling; last board smaller than `pairsPerBoard`; game ends when the deck runs out.
-8. **Widget test** — `app/test/matching_screen_test.dart`: board renders, a correct pair disappears, a wrong pair increments mistakes, timer reaching 0 shows the end screen (fake async clock). Replaces the empty placeholder in `widget_test.dart`.
+8. **Widget tests** — `app/test/matching_screen_test.dart` (9 tests, done): setup, correct/wrong pairs, time's up, deck cleared, next board, tricky words, New best!, leave dialog pause, too few cards. The board times itself with `clock.stopwatch()` so tests fast-forward the fake clock; the screen has test-only `loadCards` / `recordGame` hooks. The empty `widget_test.dart` placeholder was removed.
 9. **Test locally — required before any deploy** (the app has real users). Local backend + web build against the real database, phone-size window:
    - `flutter analyze` has no errors, `flutter test` passes, `build/web` has its fonts and icons.
    - **New game:** play full games on *Dom i mieszkanie* (60 s and 30 s), run out the clock, clear a whole small deck for the perfect-run screen, check *Codzienne sprawy* for the duplicate-translation case, leave mid-game via back, play again, best score saved.

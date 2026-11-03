@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/card.dart';
@@ -41,9 +42,22 @@ class _MatchResult {
 // ── Root screen ───────────────────────────────────────────────────────────
 
 class MatchingScreen extends StatefulWidget {
-  const MatchingScreen({super.key, this.deckId, this.deckName});
+  const MatchingScreen({
+    super.key,
+    this.deckId,
+    this.deckName,
+    this.loadCards,
+    this.recordGame,
+  });
   final String? deckId;
   final String? deckName;
+
+  /// Test hooks: default to loading cards from the API and sending the
+  /// practice + "didn't know" calls.
+  @visibleForTesting
+  final Future<List<CardModel>> Function(String deckId)? loadCards;
+  @visibleForTesting
+  final void Function(String deckId, MatchGame game)? recordGame;
 
   @override
   State<MatchingScreen> createState() => _MatchingScreenState();
@@ -78,7 +92,8 @@ class _MatchingScreenState extends State<MatchingScreen> {
   Future<void> _loadAndStart() async {
     setState(() => _phase = _Phase.loading);
     try {
-      final cards = await CardService.instance.listCards(_deckId!);
+      final load = widget.loadCards ?? CardService.instance.listCards;
+      final cards = await load(_deckId!);
       if (!mounted) return;
       if (cards.length < 2) {
         setState(() => _phase = _Phase.setup);
@@ -103,6 +118,10 @@ class _MatchingScreenState extends State<MatchingScreen> {
   /// Counts the game toward the streak and marks words mismatched twice as
   /// "didn't know". Fire-and-forget: a network error must not block the end screen.
   void _recordGame(MatchGame game) {
+    if (widget.recordGame != null) {
+      widget.recordGame!(_deckId!, game);
+      return;
+    }
     final cards = CardService.instance;
     cards
         .logPractice(deckId: _deckId!, mode: 'match', matched: game.matched, mistakes: game.mistakes)
@@ -349,7 +368,7 @@ class _BoardScreen extends StatefulWidget {
 class _BoardScreenState extends State<_BoardScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   late final MatchGame _game;
-  final Stopwatch _clock = Stopwatch();
+  final Stopwatch _clock = clock.stopwatch();
   Timer? _ticker;
   bool _over = false;
   bool _dealing = false;

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -96,8 +97,15 @@ func (r *SRSRepository) Review(ctx context.Context, cardID, userID string, knewI
 		go r.logMastery(cardID, userID)
 	}
 
-	// Update streak: if last_active was yesterday → streak++, today → no change, older → reset to 1
-	_, _ = r.pool.Exec(ctx, `
+	_ = r.touchStreak(ctx, userID)
+
+	return &sp, nil
+}
+
+// touchStreak marks the user active today: if last_active was yesterday → streak++,
+// today → no change, older → reset to 1.
+func (r *SRSRepository) touchStreak(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx, `
 		UPDATE users SET
 			last_active = CURRENT_DATE,
 			streak = CASE
@@ -112,6 +120,34 @@ func (r *SRSRepository) Review(ctx context.Context, cardID, userID string, knewI
 			END)
 		WHERE id = $1
 	`, userID)
+	return err
+}
 
-	return &sp, nil
+// ErrDeckNotFound is returned by LogPractice when the deck does not exist.
+var ErrDeckNotFound = errors.New("deck not found")
+
+// LogPractice records a finished game: it counts toward the streak and writes a
+// 'match' activity_log entry ("matched N words in <deck>") for every group the
+// user belongs to. Word progress is not touched here.
+func (r *SRSRepository) LogPractice(ctx context.Context, userID, deckID string, matched int) error {
+	var deckTitle string
+	err := r.pool.QueryRow(ctx, `SELECT title FROM decks WHERE id = $1`, deckID).Scan(&deckTitle)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrDeckNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	if err := r.touchStreak(ctx, userID); err != nil {
+		return err
+	}
+
+	_, err = r.pool.Exec(ctx, `
+		INSERT INTO activity_log (user_id, group_id, kind, subject, target)
+		SELECT $1, gm.group_id, 'match', $2, $3
+		FROM group_members gm
+		WHERE gm.user_id = $1
+	`, userID, deckTitle, fmt.Sprintf("%d", matched))
+	return err
 }

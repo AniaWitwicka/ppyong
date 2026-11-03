@@ -239,3 +239,10 @@ Needed by: **Import deck screen (§24)**
 - [ ] Teacher endpoints — require role `teacher`/`admin`; `/groups/{id}/students` and `/groups/{id}/activity` only for the group owner
 - [ ] Deck/collection sharing is a no-op (`Share` only returns users) — add a share table, or create `srs_progress` rows for shared members (see `import/chikas_share.sql`)
 - [ ] Limit the DB pool (`pool_max_conns=5` in `DATABASE_URL` on Railway) — the backend holds all 15 Supabase session-pooler connections
+
+---
+
+## 13. Practice (games)
+
+- [x] `POST /practice` — body `{ deck_id, mode: "match", matched, mistakes }`; 204. Updates `last_active`/streak like a review and writes `activity_log` (`kind = 'match'`, `subject` = deck title, `target` = words matched) for each of the user's groups. `matched = 0` → 204, nothing recorded; unknown deck → 404
+- [x] Streak update moved to `SRSRepository.touchStreak`, shared by reviews and practice

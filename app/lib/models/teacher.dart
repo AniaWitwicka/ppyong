@@ -97,7 +97,7 @@ class ActivityEvent {
   final String id;
   final String userName;
   final String initials;
-  final String kind; // 'mastered' | 'streak' | 'quiz' | 'weak'
+  final String kind; // 'mastered' | 'streak' | 'quiz' | 'weak' | 'match' (target = words matched)
   final String subject;
   final String target;
   final DateTime createdAt;

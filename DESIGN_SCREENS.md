@@ -1025,3 +1025,46 @@ Forest green `#267F53` is now reserved as the **teacher view identity color**, u
 - Selected state in teacher-only pickers (e.g. import source tabs, collection chips, auto-assign rows)
 
 This keeps a clear visual separation: periwinkle = student home, pink = groups, yellow = profile, green = teacher tools.
+
+---
+
+## 21. Matching game screen
+
+### Overview
+Timed tap-to-match game. Korean tiles on the left, translations on the right, each column shuffled separately. Match as many pairs as possible before the clock runs out; each cleared board deals the next one from the deck. Identity colour: bubblegum `#F296BD`, corner tint `#FEF0F6`. Full rules and plan: `docs/matching-game-plan.md`.
+
+### Flow
+Deck picker (shared with Multiple choice, bubblegum header) → Setup → Board → Completion. Opening from a deck page skips the picker.
+
+### Setup
+- Bubblegum header with back button + deck name
+- "Ready to match?" (24px, 800) + one-line explanation
+- **Time limit** chips: 30 s · 60 s · 90 s (default 60) — selected chip bubblegum fill, white text; others white with border
+- **Pairs per board** chips: 4 · 5 · 6 (default 6)
+- "Start" orange pill at the bottom
+
+### Board
+- Top bar: back button (white card) · countdown bar (bubblegum on fog track, 7px; turns orange at ≤10 s) · seconds left · matched chip (green) · mistakes chip (pink)
+- Column labels "KOREAN" / "TRANSLATION" (11px, 700, ash, uppercase)
+- Tiles fill the remaining height in rows, 10px gap, 12px between columns: white bg, 2px `#E8E4DE` border, 18px radius
+  - Korean text 20px / 800; translation 15px / 600, 13px when longer than 18 characters; max 3 lines
+  - Selected: periwinkle border + 15% periwinkle tint
+  - Correct pair: green `#267F53` border, `#E8F5EE` bg, scale pop 1→1.06→1 (300ms), then fades out (250ms) and stays as empty space
+  - Wrong pair: pink `#C45A8A` border, `#FEF0F6` bg, shake (−6, 6, −4, 4, 0px, 400ms)
+- Next board appears 350ms after the last pair of a board
+- Back button or system back → "Leave the game?" dialog; the clock pauses while it is open and while the app is in the background
+
+### Completion
+- Yellow squircle: 🎉 when the whole deck was cleared ("Deck cleared!", "All N words matched with Xs to spare"), ⏱️ when time ran out ("Time's up!", "<deck> · best N")
+- "New best!" pink pill when the score beats the stored best (per deck + time limit, stored on the device)
+- Three stat cards: MATCHED (green) · MISTAKES (pink) · ACCURACY (yellow)
+- When words were mismatched twice: "N tricky words will come back sooner in Flashcards" (13px, ash) under the stats
+- "Play again" orange pill (same deck + settings) · "Back to study modes" ghost button
+
+### Progress
+- Correct matches don't change word progress. Words in 2+ wrong pairs are sent as "didn't know" at game end; every game with a match counts toward the streak (`POST /practice`).
+- Teacher feeds show it as "<name> matched N words in <deck>" — bubblegum compare-arrows icon.
+
+### Entry points
+- Learn tab: Matching card is now active (tags "Timed" · "Pairs")
+- Deck detail: "Match" button (bubblegum outline) next to "Multiple choice"; "Preview cards" moves to its own full-width row below

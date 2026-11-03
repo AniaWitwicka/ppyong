@@ -880,6 +880,12 @@ class _ActivityItem extends StatelessWidget {
           AppColors.bubblegum,
           Icons.auto_awesome
         );
+      case 'match':
+        return (
+          const Color(0xFFFEF0F6),
+          AppColors.bubblegum,
+          Icons.compare_arrows_rounded
+        );
       default:
         return (const Color(0xFFEEF3FE), AppColors.periwinkle, Icons.info);
     }
@@ -895,6 +901,8 @@ class _ActivityItem extends StatelessWidget {
         return ' quizzed ';
       case 'weak':
         return ' struggled with ';
+      case 'match':
+        return ' matched ${event.target} words in ';
       default:
         return ' ';
     }

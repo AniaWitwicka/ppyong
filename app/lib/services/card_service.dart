@@ -52,4 +52,19 @@ class CardService {
   Future<void> reviewCard(String id, bool knewIt) async {
     await _api.post('/cards/$id/review', {'knew_it': knewIt});
   }
+
+  /// Records a finished game so it counts toward the streak and the group feed.
+  Future<void> logPractice({
+    required String deckId,
+    required String mode,
+    required int matched,
+    required int mistakes,
+  }) async {
+    await _api.post('/practice', {
+      'deck_id': deckId,
+      'mode': mode,
+      'matched': matched,
+      'mistakes': mistakes,
+    });
+  }
 }

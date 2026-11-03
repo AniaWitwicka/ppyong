@@ -570,6 +570,7 @@ class _ActivityRow extends StatelessWidget {
       case 'mastered': return Icons.check_circle_outline;
       case 'streak': return Icons.local_fire_department_outlined;
       case 'quiz': return Icons.quiz_outlined;
+      case 'match': return Icons.compare_arrows_rounded;
       default: return Icons.trending_down_outlined;
     }
   }
@@ -638,6 +639,7 @@ class _ActivityRow extends StatelessWidget {
       case 'mastered': return 'mastered';
       case 'streak': return 'hit a streak on';
       case 'quiz': return 'completed a quiz in';
+      case 'match': return 'matched ${event.target} words in';
       default: return 'is struggling with';
     }
   }

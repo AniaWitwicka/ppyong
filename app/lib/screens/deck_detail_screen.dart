@@ -10,6 +10,7 @@ import '../widgets/add_flashcard_sheet.dart';
 import '../widgets/deck_share_dialog.dart';
 import '../widgets/app_error_body.dart';
 import 'flashcard_study_screen.dart';
+import 'matching_screen.dart';
 import 'multiple_choice_screen.dart';
 
 class DeckDetailScreen extends StatefulWidget {
@@ -499,22 +500,42 @@ class _ActionButtons extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: GestureDetector(
-                onTap: () => _showPreview(context, cards),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => MatchingScreen(deckId: deckId, deckName: deckName)),
+                ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: AppRadius.pill,
-                    border: Border.all(color: AppColors.border, width: 1.5),
+                    border: Border.all(color: AppColors.bubblegum, width: 1.5),
                   ),
                   alignment: Alignment.center,
-                  child: Text('Preview cards',
+                  child: Text('Match',
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: AppColors.ink, fontWeight: FontWeight.w600)),
+                            color: const Color(0xFFC45A8A), fontWeight: FontWeight.w600)),
                 ),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: () => _showPreview(context, cards),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: AppRadius.pill,
+              border: Border.all(color: AppColors.border, width: 1.5),
+            ),
+            alignment: Alignment.center,
+            child: Text('Preview cards',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: AppColors.ink, fontWeight: FontWeight.w600)),
+          ),
         ),
       ],
     );

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/yourname/koreanapp-backend/internal/repository"
@@ -90,4 +91,37 @@ func (h *CardHandler) Review(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, progress)
+}
+
+// Practice records a finished game (currently only "match") so it counts toward
+// the streak and shows in the group activity feed. A game with no matches is ignored.
+func (h *CardHandler) Practice(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DeckID   string `json:"deck_id"`
+		Mode     string `json:"mode"`
+		Matched  int    `json:"matched"`
+		Mistakes int    `json:"mistakes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Mode != "match" || req.DeckID == "" || req.Matched < 0 || req.Mistakes < 0 {
+		writeError(w, http.StatusBadRequest, "deck_id, mode \"match\" and non-negative counts are required")
+		return
+	}
+	if req.Matched == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	err := h.srsRepo.LogPractice(r.Context(), userIDFromContext(r), req.DeckID, req.Matched)
+	if errors.Is(err, repository.ErrDeckNotFound) {
+		writeError(w, http.StatusNotFound, "deck not found")
+		return
+	}
+	if err != nil {
+		writeServerError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

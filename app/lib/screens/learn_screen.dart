@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'flashcard_study_screen.dart';
+import 'matching_screen.dart';
 import 'multiple_choice_screen.dart';
 
 class LearnScreen extends StatelessWidget {
@@ -51,12 +52,19 @@ class LearnScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _ComingSoonCard(
+                  _ModeCard(
                     title: 'Matching',
                     description: 'Match Korean words to their translations.',
+                    tags: const ['Timed', 'Pairs'],
                     color: AppColors.bubblegum,
                     cornerTint: const Color(0xFFFEF0F6),
                     icon: Icons.compare_arrows_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MatchingScreen(),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   _ComingSoonCard(

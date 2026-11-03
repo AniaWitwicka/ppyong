@@ -93,6 +93,9 @@ func main() {
 	mux.HandleFunc("DELETE /cards/{id}", auth(cardHandler.Delete))
 	mux.HandleFunc("POST /cards/{id}/review", auth(cardHandler.Review))
 
+	// Practice (finished games — streak + activity feed)
+	mux.HandleFunc("POST /practice", auth(cardHandler.Practice))
+
 	// Users
 	mux.HandleFunc("GET /users", auth(userHandler.ListUsers))
 	mux.HandleFunc("GET /users/{id}", auth(userHandler.GetUser))

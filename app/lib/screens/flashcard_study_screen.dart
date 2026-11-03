@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/batch_test.dart';
 import '../models/card.dart';
 import '../models/collection.dart';
 import '../models/deck.dart';
@@ -10,10 +11,11 @@ import '../services/collection_service.dart';
 import '../services/deck_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/quiz_question.dart';
 
 enum _Direction { krToEn, enToKr }
 enum _Scope { all, due, weak }
-enum _Phase { pick, study, complete }
+enum _Phase { pick, study, test, complete }
 
 class FlashcardStudyScreen extends StatefulWidget {
   const FlashcardStudyScreen({
@@ -50,10 +52,25 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   List<CardModel> _cards = [];
   StudyQueue? _queue;
   int _sessionSize = StudyQueue.defaultSize;
-  int _index = 0;
+
+  /// Cards still to go through in the learn phase; the front one is shown.
+  /// With the test on, "Again" sends a card to the back until it's known.
+  List<CardModel> _learn = [];
+  int _step = 0;
   int _knewIt = 0;
   int _again = 0;
   bool _loadingCards = false;
+
+  /// Learn → test: swipes are a self-check and only the mini test after the
+  /// batch saves word progress. Off: every swipe saves, as before.
+  bool _testAfterBatch = true;
+  bool _testing = false;
+
+  /// Wrong options for the test come from the whole deck.
+  List<CardModel> _pool = [];
+  BatchTest? _test;
+  int _testCorrect = 0;
+  int _testWrong = 0;
 
   int _totalCount = 0;
   int _dueCount = 0;
@@ -67,7 +84,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
     _deckId = widget.deckId;
     _deckName = widget.deckName;
     if (_deckId != null) _loadCounts();
-    _loadSessionSize();
+    _loadPrefs();
   }
 
   Future<List<CardModel>> _load(String deckId, String scope) =>
@@ -75,15 +92,26 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
       CardService.instance.listCards(deckId, scope: scope);
 
   static const _sessionSizeKey = 'study_session_size';
+  static const _testAfterBatchKey = 'study_test_after_batch';
 
-  Future<void> _loadSessionSize() async {
+  Future<void> _loadPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getInt(_sessionSizeKey);
-      if (saved != null && StudyQueue.sizes.contains(saved) && mounted) {
-        setState(() => _sessionSize = saved);
-      }
+      final test = prefs.getBool(_testAfterBatchKey);
+      if (!mounted) return;
+      setState(() {
+        if (saved != null && StudyQueue.sizes.contains(saved)) _sessionSize = saved;
+        if (test != null) _testAfterBatch = test;
+      });
     } catch (_) {}
+  }
+
+  void _onTestAfterBatchChanged(bool value) {
+    setState(() => _testAfterBatch = value);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setBool(_testAfterBatchKey, value))
+        .catchError((_) => false);
   }
 
   void _onSessionSizeChanged(int size) {
@@ -137,6 +165,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
               ? 'weak'
               : '';
       final cards = await _load(_deckId!, scope);
+      final pool = scope.isEmpty ? cards : await _load(_deckId!, '');
       if (!mounted) return;
       if (cards.isNotEmpty) {
         final prefs = await SharedPreferences.getInstance();
@@ -149,44 +178,85 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
       );
       setState(() {
         _queue = queue;
-        _cards = queue.session;
-        _index = 0;
-        _knewIt = 0;
-        _again = 0;
+        _pool = pool;
+        _testing = _testAfterBatch &&
+            BatchTest.canTest(pool, koreanPrompt: _direction == _Direction.krToEn);
         _loadingCards = false;
-        _phase = cards.isEmpty ? _Phase.complete : _Phase.study;
+        _beginBatch(queue.session);
       });
     } catch (_) {
       if (mounted) setState(() => _loadingCards = false);
     }
   }
 
+  /// Resets per-batch state for [cards]; call inside setState.
+  void _beginBatch(List<CardModel> cards) {
+    _cards = cards;
+    _learn = List.of(cards);
+    _step = 0;
+    _knewIt = 0;
+    _again = 0;
+    _test = null;
+    _testCorrect = 0;
+    _testWrong = 0;
+    _phase = cards.isEmpty ? _Phase.complete : _Phase.study;
+  }
+
+  void _saveReview(CardModel card, bool knew) {
+    (widget.reviewCard ?? CardService.instance.reviewCard)(card.id, knew).catchError((_) {
+      if (mounted) {
+        showAppToast(context, variant: ToastVariant.error, title: 'Review sync failed');
+      }
+    });
+  }
+
   void _answer(bool knew) {
-    final card = _cards.isNotEmpty ? _cards[_index] : null;
-    if (card != null) {
-      (widget.reviewCard ?? CardService.instance.reviewCard)(card.id, knew).catchError((_) {
-        if (mounted) {
-          showAppToast(context, variant: ToastVariant.error, title: 'Review sync failed');
-        }
-      });
-    }
+    if (_learn.isEmpty) return;
+    final card = _learn.first;
+    if (!_testing) _saveReview(card, knew);
     setState(() {
       if (knew) { _knewIt++; } else { _again++; }
-      if (_cards.isEmpty || _index + 1 >= _cards.length) {
-        _phase = _Phase.complete;
-      } else {
-        _index++;
+      _learn.removeAt(0);
+      if (_testing && !knew) _learn.add(card);
+      _step++;
+      if (_learn.isEmpty) {
+        if (_testing) {
+          _test = BatchTest(_cards, _pool, koreanPrompt: _direction == _Direction.krToEn);
+          _phase = _Phase.test;
+        } else {
+          _phase = _Phase.complete;
+        }
       }
+    });
+  }
+
+  void _onTestAnswer(bool correct) {
+    final test = _test;
+    if (test == null) return;
+    final card = test.current.card;
+    final firstTry = test.answer(correct);
+    if (firstTry != null) _saveReview(card, firstTry);
+    setState(() {
+      if (correct) { _testCorrect++; } else { _testWrong++; }
+    });
+  }
+
+  void _onTestNext() {
+    final test = _test;
+    if (test == null) return;
+    setState(() {
+      if (!test.next()) _phase = _Phase.complete;
     });
   }
 
   void _restart() {
     setState(() {
-      _index = 0;
       _phase = _Phase.pick;
       _knewIt = 0;
       _again = 0;
       _cards = [];
+      _learn = [];
+      _test = null;
       _queue = null;
     });
     if (_deckId != null) _loadCounts();
@@ -197,13 +267,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
     final queue = _queue;
     if (queue == null || !queue.hasNextSession) return;
     queue.nextSession();
-    setState(() {
-      _cards = queue.session;
-      _index = 0;
-      _knewIt = 0;
-      _again = 0;
-      _phase = _Phase.study;
-    });
+    setState(() => _beginBatch(queue.session));
   }
 
   @override
@@ -224,6 +288,8 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
         onScopeChanged: (s) => setState(() => _scope = s),
         sessionSize: _sessionSize,
         onSessionSizeChanged: _onSessionSizeChanged,
+        testAfterBatch: _testAfterBatch,
+        onTestAfterBatchChanged: _onTestAfterBatchChanged,
         scopeCount: _scopeCount,
         onStart: _startStudy,
         loading: _loadingCards,
@@ -235,10 +301,13 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
 
     if (_phase == _Phase.complete) {
       final queue = _queue;
+      final test = _test;
       return _SessionComplete(
         deckName: _deckName,
         knewIt: _knewIt,
         again: _again,
+        remembered: test?.remembered,
+        missed: test?.missed,
         total: _cards.isNotEmpty ? _cards.length : 0,
         sessionNumber: queue?.sessionNumber ?? 1,
         sessionCount: queue?.sessionCount ?? 1,
@@ -247,6 +316,28 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
         onNextSession: _nextSession,
         onRestart: _restart,
         isTab: _isTab,
+      );
+    }
+
+    final test = _test;
+    if (_phase == _Phase.test && test != null) {
+      final q = test.current;
+      final batchSize = _cards.length;
+      return QuizQuestionView(
+        key: ValueKey('test-${test.position}'),
+        label: test.koreanPrompt ? 'WHAT DOES THIS MEAN?' : 'HOW DO YOU SAY THIS IN KOREAN?',
+        prompt: q.prompt,
+        hint: q.hint,
+        footer: q.isRetry
+            ? 'Quick test · one more try'
+            : 'Quick test · ${test.position + 1} of $batchSize',
+        options: q.options,
+        correctIndex: q.correctIndex,
+        progress: (test.position + 1) / test.length,
+        correct: _testCorrect,
+        wrong: _testWrong,
+        onAnswer: _onTestAnswer,
+        onNext: _onTestNext,
       );
     }
 
@@ -264,7 +355,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
           children: [
             _StudyHeader(
               deckName: widget.deckName ?? 'Study',
-              index: _index,
+              index: _cards.length - _learn.length,
               total: _cards.length,
               isTab: _isTab,
               knewIt: _knewIt,
@@ -272,8 +363,8 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
             ),
             Expanded(
               child: _StudyCard(
-                key: ValueKey(_index),
-                card: _cards[_index],
+                key: ValueKey(_step),
+                card: _learn.first,
                 direction: _direction,
                 onAnswer: _answer,
               ),
@@ -625,6 +716,8 @@ class _DirectionPickerScreen extends StatelessWidget {
     required this.onScopeChanged,
     required this.sessionSize,
     required this.onSessionSizeChanged,
+    required this.testAfterBatch,
+    required this.onTestAfterBatchChanged,
     required this.scopeCount,
     required this.onStart,
     required this.loading,
@@ -640,6 +733,8 @@ class _DirectionPickerScreen extends StatelessWidget {
   final ValueChanged<_Scope> onScopeChanged;
   final int sessionSize; // 0 = whole deck
   final ValueChanged<int> onSessionSizeChanged;
+  final bool testAfterBatch;
+  final ValueChanged<bool> onTestAfterBatchChanged;
   final int scopeCount; // cards in the chosen scope
 
   /// e.g. "61 cards → 4 sessions of up to 20" or "All 61 cards in one go".
@@ -755,6 +850,8 @@ class _DirectionPickerScreen extends StatelessWidget {
                           .bodyMedium
                           ?.copyWith(color: AppColors.ash),
                     ),
+                    const SizedBox(height: 28),
+                    _TestToggle(value: testAfterBatch, onChanged: onTestAfterBatchChanged),
                   ],
                 ),
               ),
@@ -785,6 +882,62 @@ class _DirectionPickerScreen extends StatelessWidget {
                         ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Test after each batch" switch on the setup screen.
+class _TestToggle extends StatelessWidget {
+  const _TestToggle({required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.fog.withOpacity(0.5), width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Test after each batch',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value
+                        ? 'A quick quiz on the batch — only it counts toward progress'
+                        : 'Quick review — every swipe counts toward progress',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppColors.ash, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: Colors.white,
+              activeTrackColor: AppColors.periwinkle,
             ),
           ],
         ),
@@ -1532,6 +1685,8 @@ class _SessionComplete extends StatelessWidget {
     required this.deckName,
     required this.knewIt,
     required this.again,
+    this.remembered,
+    this.missed,
     required this.total,
     required this.sessionNumber,
     required this.sessionCount,
@@ -1545,6 +1700,10 @@ class _SessionComplete extends StatelessWidget {
   final String? deckName;
   final int knewIt;
   final int again;
+
+  /// First-try test results; null when the batch had no test.
+  final int? remembered;
+  final int? missed;
   final int total;
   final int sessionNumber;
   final int sessionCount;
@@ -1559,6 +1718,7 @@ class _SessionComplete extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasNext = wordsLeft > 0;
+    final tested = remembered != null && missed != null;
     final subtitle = [
       if (deckName != null) deckName!,
       if (sessionCount > 1) 'Session $sessionNumber of $sessionCount',
@@ -1603,8 +1763,8 @@ class _SessionComplete extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _ResultCard(
-                      label: 'Knew it',
-                      value: knewIt,
+                      label: tested ? 'Remembered' : 'Knew it',
+                      value: tested ? remembered! : knewIt,
                       bg: const Color(0xFFE8F5EE),
                       textColor: AppColors.forestGreen,
                     ),
@@ -1612,16 +1772,30 @@ class _SessionComplete extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _ResultCard(
-                      label: 'Again',
-                      value: again,
+                      label: tested ? 'Missed' : 'Again',
+                      value: tested ? missed! : again,
                       bg: const Color(0xFFFEF0F6),
                       textColor: AppColors.bubblegum,
                     ),
                   ),
                 ],
               ),
-              if (hasNext) ...[
+              if (tested) ...[
                 const SizedBox(height: 20),
+                Text(
+                  missed == 0
+                      ? 'All $total remembered!'
+                      : '$remembered / $total remembered — '
+                          '$missed will come back sooner',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AppColors.ink, fontWeight: FontWeight.w600),
+                ),
+              ],
+              if (hasNext) ...[
+                SizedBox(height: tested ? 8 : 20),
                 Text(
                   '$wordsLeft word${wordsLeft == 1 ? '' : 's'} left to go',
                   style: Theme.of(context)

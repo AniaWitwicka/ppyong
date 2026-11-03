@@ -1089,3 +1089,32 @@ Progress bar and counter count the session ("5/20"), not the whole deck.
 - "41 words left to go" (13px, ash)
 - **Next 20 words** (orange pill) · **Done for now** (periwinkle tint) — goes back to the deck
 - After the last session: "All sessions done!" · **Study again** · **Back to deck**
+
+## 23. Learn → mini test (flashcards)
+
+Word progress only changes when a word is tested, not when a flashcard is swiped.
+
+### Setup screen (addition)
+- **"Test after each batch"** row under Words per session: white rounded box, title + 13px ash line, periwinkle switch on the right. On by default, remembered on the device.
+  - On: "A quick quiz on the batch — only it counts toward progress"
+  - Off: "Quick review — every swipe counts toward progress" (the old behaviour: every swipe saves, "Again" cards are not repeated)
+
+### Learn phase
+- Same flashcards; swipes are only a self-check and save nothing.
+- **Again** sends the card to the back of the batch — the test starts only once every card was marked **Knew it**.
+- Counter = words known so far ("6/10").
+
+### Mini test
+- Starts straight after the last card, on the batch's words in random order.
+- Multiple choice, same look as the Multiple choice game (shared `QuizQuestionView`), in the studied direction:
+  - Korean → Translation: "WHAT DOES THIS MEAN?", Korean + romanisation, 4 translations
+  - Translation → Korean: "HOW DO YOU SAY THIS IN KOREAN?", translation, 4 Korean options
+- Wrong options come from the whole deck (never the same text as the answer).
+- Footer on its own line under the word: "Quick test · 3 of 10", or "Quick test · one more try" for a retry.
+- A wrong answer comes back at the end until it's answered right; **only the first try is saved** (right = knew it, wrong = didn't know).
+- Decks with fewer than 2 different answers skip the test and save the swipes.
+
+### End of batch
+- Result cards **Remembered** / **Missed** (first tries)
+- "8 / 10 remembered — 2 will come back sooner" or "All 10 remembered!" (14px, ink, semibold)
+- Then the usual "N words left to go" · Next N words / Done for now

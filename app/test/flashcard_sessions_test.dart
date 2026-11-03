@@ -16,9 +16,11 @@ CardModel card(int i) => CardModel(
 class _Harness {
   final reviewed = <String>[];
 
+  /// Opens the study screen; the test after each batch is off unless [prefs]
+  /// turn it on (that flow is covered in flashcard_batch_test_test.dart).
   Future<void> open(WidgetTester tester, int deckSize,
       {Map<String, Object> prefs = const {}}) async {
-    SharedPreferences.setMockInitialValues(prefs);
+    SharedPreferences.setMockInitialValues({'study_test_after_batch': false, ...prefs});
     await tester.binding.setSurfaceSize(const Size(400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final cards = [for (var i = 0; i < deckSize; i++) card(i)];

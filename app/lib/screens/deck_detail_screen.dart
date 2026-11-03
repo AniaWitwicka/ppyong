@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/card.dart';
+import '../models/card_sort.dart';
 import '../models/deck.dart';
 import '../services/card_service.dart';
 import '../services/deck_service.dart';
@@ -30,6 +31,7 @@ class DeckDetailScreen extends StatefulWidget {
 class _DeckDetailScreenState extends State<DeckDetailScreen> {
   DeckDetail? _deck;
   List<CardModel> _cards = [];
+  CardSort _sort = CardSort.deckOrder;
   bool _loading = true;
   bool _hasError = false;
 
@@ -114,8 +116,12 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
                     cards: _cards,
                   ),
                   const Divider(color: AppColors.border, height: 1),
-                  _CardsHeader(),
-                  ..._cards.map((c) => _ExpandableCardRow(card: c)),
+                  _CardsHeader(
+                    sort: _sort,
+                    onTap: () => setState(() => _sort = _sort.next),
+                  ),
+                  for (final c in _sort.apply(_cards))
+                    _ExpandableCardRow(key: ValueKey(c.id), card: c),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -554,26 +560,53 @@ class _ActionButtons extends StatelessWidget {
 // ── Cards list ────────────────────────────────────────────────────────────
 
 class _CardsHeader extends StatelessWidget {
+  const _CardsHeader({required this.sort, required this.onTap});
+  final CardSort sort;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
+    final active = sort != CardSort.deckOrder;
+    final color = active ? Colors.white : AppColors.ink;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Row(
         children: [
           Text('All cards', style: Theme.of(context).textTheme.headlineMedium),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius: AppRadius.pill,
-            ),
-            child: Text(
-              'Sort by status',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+          GestureDetector(
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: active ? AppColors.periwinkle : Colors.transparent,
+                border: Border.all(color: active ? AppColors.periwinkle : AppColors.border),
+                borderRadius: AppRadius.pill,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (active) ...[
+                    Icon(
+                      sort == CardSort.newFirst
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded,
+                      size: 14,
+                      color: color,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    sort.label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: color,
+                        ),
                   ),
+                ],
+              ),
             ),
           ),
         ],
@@ -583,7 +616,7 @@ class _CardsHeader extends StatelessWidget {
 }
 
 class _ExpandableCardRow extends StatefulWidget {
-  const _ExpandableCardRow({required this.card});
+  const _ExpandableCardRow({super.key, required this.card});
   final CardModel card;
 
   @override

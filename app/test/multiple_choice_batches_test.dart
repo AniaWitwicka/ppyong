@@ -41,15 +41,16 @@ Future<List<String>> openQuiz(WidgetTester tester) async {
   return reviewed;
 }
 
-/// Picks the right option for the word on screen, then presses Next.
+String currentWord(WidgetTester tester) => tester
+    .widgetList<Text>(find.byType(Text))
+    .map((t) => t.data ?? '')
+    .firstWhere((s) => s.startsWith('k-'))
+    .substring(2);
+
+/// Picks the right option for the word on screen; the quiz moves on by itself.
 Future<void> answerRight(WidgetTester tester) async {
-  final prompt = tester
-      .widgetList<Text>(find.byType(Text))
-      .map((t) => t.data ?? '')
-      .firstWhere((s) => s.startsWith('k-'));
-  await tester.tap(find.text('t-${prompt.substring(2)}'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('Next →'));
+  await tester.tap(find.text('t-${currentWord(tester)}'));
+  await tester.pump(const Duration(milliseconds: 900));
   await tester.pumpAndSettle();
 }
 
@@ -96,6 +97,34 @@ void main() {
     expect(find.text('12 cards → 2 sessions of up to 10'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getInt('study_session_size'), 10);
+  });
+
+  testWidgets('a right answer moves on by itself; a wrong one waits for Next',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'study_session_size': 10});
+    final reviewed = await openQuiz(tester);
+    await tester.tap(find.text('Start'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('t-${currentWord(tester)}'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Question 1 of 10'), findsOneWidget,
+        reason: 'the green answer stays on screen for a moment');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('Question 2 of 10'), findsOneWidget);
+
+    final word = currentWord(tester);
+    await tester.tap(find.byWidgetPredicate((w) =>
+        w is Text && (w.data ?? '').startsWith('t-') && w.data != 't-$word').first);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.text('Question 2 of 10'), findsOneWidget,
+        reason: 'a wrong answer waits so the right one can be read');
+    await tester.tap(find.text('Next →'));
+    await tester.pumpAndSettle();
+    expect(find.text('Question 3 of 10'), findsOneWidget);
+    expect(reviewed, hasLength(2));
   });
 
   testWidgets('Finish after a batch leaves the quiz', (tester) async {

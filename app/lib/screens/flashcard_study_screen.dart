@@ -358,6 +358,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
         wrong: _testWrong,
         onAnswer: _onTestAnswer,
         onNext: _onTestNext,
+        autoAdvanceOnCorrect: true,
       );
     }
 

@@ -48,7 +48,8 @@ Future<void> swipe(WidgetTester tester, {required bool knew}) async {
   await tester.pumpAndSettle();
 }
 
-/// Answers the current test question right or wrong, then taps Next.
+/// Answers the current test question. A right answer moves on by itself;
+/// a wrong one waits for Next.
 Future<void> answer(WidgetTester tester, {required bool right}) async {
   final i = currentKorean(tester).substring(1);
   final option = right
@@ -56,6 +57,11 @@ Future<void> answer(WidgetTester tester, {required bool right}) async {
       : find.byWidgetPredicate((w) =>
           w is Text && RegExp(r'^t\d+$').hasMatch(w.data ?? '') && w.data != 't$i');
   await tester.tap(option.first);
+  if (right) {
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+    return;
+  }
   await tester.pump(const Duration(milliseconds: 500));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Next →'));
@@ -125,6 +131,39 @@ void main() {
     expect(reviewed, hasLength(3), reason: 'one save per word, retries not saved');
     expect(reviewed.where((r) => r.$1 == missedId).single.$2, isFalse);
     expect(reviewed.where((r) => r.$1 != missedId).every((r) => r.$2), isTrue);
+  });
+
+  testWidgets('a right test answer moves on by itself; a wrong one waits for Next',
+      (tester) async {
+    await open(tester, 3);
+    for (var i = 0; i < 3; i++) {
+      await swipe(tester, knew: true);
+    }
+    expect(find.text('Quick test · 1 of 3'), findsOneWidget);
+
+    final i = currentKorean(tester).substring(1);
+    await tester.tap(find.text('t$i'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Quick test · 1 of 3'), findsOneWidget,
+        reason: 'the green answer stays on screen for a moment');
+    final next = tester.widget<AnimatedOpacity>(find.ancestor(
+        of: find.text('Next →'), matching: find.byType(AnimatedOpacity)));
+    expect(next.opacity, 0, reason: 'no Next button after a right answer');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('Quick test · 2 of 3'), findsOneWidget);
+
+    final j = currentKorean(tester).substring(1);
+    await tester.tap(find.byWidgetPredicate((w) =>
+        w is Text && RegExp(r'^t\d+$').hasMatch(w.data ?? '') && w.data != 't$j').first);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.text('Quick test · 2 of 3'), findsOneWidget,
+        reason: 'a wrong answer waits so the right one can be read');
+    await tester.tap(find.text('Next →'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quick test · 3 of 3'), findsOneWidget);
+    expect(reviewed, hasLength(2));
   });
 
   testWidgets('batches of 10: test each batch, then the next batch', (tester) async {

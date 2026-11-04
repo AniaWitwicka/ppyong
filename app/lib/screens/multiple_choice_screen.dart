@@ -239,6 +239,7 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
           wrong: _wrong,
           onAnswer: _onAnswer,
           onNext: _nextQuestion,
+          autoAdvanceOnCorrect: true,
         ),
       _Phase.complete => _CompletionScreen(
           deckName: _selection?.label,

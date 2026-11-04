@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -19,7 +21,11 @@ class QuizQuestionView extends StatefulWidget {
     required this.wrong,
     required this.onAnswer,
     required this.onNext,
+    this.autoAdvanceOnCorrect = false,
   });
+
+  /// How long a right answer stays on screen before moving on by itself.
+  static const autoAdvanceDelay = Duration(milliseconds: 800);
 
   /// Word asked about, with an optional line under it (romanisation).
   final String prompt;
@@ -36,6 +42,11 @@ class QuizQuestionView extends StatefulWidget {
   final void Function(bool correct) onAnswer;
   final VoidCallback onNext;
 
+  /// A right answer moves on by itself after [autoAdvanceDelay], with no
+  /// Next button. A wrong answer still waits for Next, so there's time to
+  /// read the right one.
+  final bool autoAdvanceOnCorrect;
+
   @override
   State<QuizQuestionView> createState() => _QuizQuestionViewState();
 }
@@ -44,6 +55,8 @@ class _QuizQuestionViewState extends State<QuizQuestionView>
     with TickerProviderStateMixin {
   int? _selectedIndex;
   bool _showNext = false;
+  bool _advanced = false;
+  Timer? _autoAdvance;
 
   late AnimationController _slideCtrl;
   late Animation<double> _slideAnim;
@@ -84,6 +97,7 @@ class _QuizQuestionViewState extends State<QuizQuestionView>
 
   @override
   void dispose() {
+    _autoAdvance?.cancel();
     _slideCtrl.dispose();
     _shakeCtrl.dispose();
     _popCtrl.dispose();
@@ -100,9 +114,23 @@ class _QuizQuestionViewState extends State<QuizQuestionView>
     } else {
       _shakeCtrl.forward();
     }
+    if (isCorrect && widget.autoAdvanceOnCorrect) {
+      _autoAdvance = Timer(QuizQuestionView.autoAdvanceDelay, () {
+        if (mounted) _goNext();
+      });
+      return;
+    }
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) setState(() => _showNext = true);
     });
+  }
+
+  /// Moves on once, whether from the Next button or the timer.
+  void _goNext() {
+    if (_advanced) return;
+    _advanced = true;
+    _autoAdvance?.cancel();
+    widget.onNext();
   }
 
   @override
@@ -182,7 +210,7 @@ class _QuizQuestionViewState extends State<QuizQuestionView>
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 child: GestureDetector(
-                  onTap: _showNext ? widget.onNext : null,
+                  onTap: _showNext ? _goNext : null,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),

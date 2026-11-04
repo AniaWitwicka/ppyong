@@ -1,12 +1,19 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import 'api_service.dart';
+import 'teacher_service.dart';
+import 'user_service.dart';
 
 class AuthService {
   AuthService._();
   static final AuthService instance = AuthService._();
 
   static const _tokenKey = 'auth_token';
+
+  /// Saved values that belong to one account, not to the device: the Resume
+  /// card's deck and the matching game's best scores.
+  static const _accountKeys = ['last_deck_id', 'last_deck_name'];
+  static const _accountKeyPrefixes = ['match_best_'];
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -47,11 +54,25 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     ApiService.instance.clearToken();
+    await _forgetAccount(prefs);
   }
 
   Future<void> _persist(String token) async {
     final prefs = await SharedPreferences.getInstance();
+    await _forgetAccount(prefs);
     await prefs.setString(_tokenKey, token);
     ApiService.instance.setToken(token);
+  }
+
+  /// Drops everything kept for the previous account, so the next person who
+  /// signs in on this device doesn't see their name, role or Resume card.
+  Future<void> _forgetAccount(SharedPreferences prefs) async {
+    UserService.instance.clearCache();
+    TeacherService.instance.clearCache();
+    final keys = prefs.getKeys().where((k) =>
+        _accountKeys.contains(k) || _accountKeyPrefixes.any(k.startsWith));
+    for (final k in keys.toList()) {
+      await prefs.remove(k);
+    }
   }
 }

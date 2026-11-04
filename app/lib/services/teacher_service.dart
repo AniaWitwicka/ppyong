@@ -8,6 +8,9 @@ class TeacherService {
   TeacherDashboard? _dashboardCache;
   TeacherDashboard? get cachedDashboard => _dashboardCache;
 
+  /// Forgets the signed-in teacher's dashboard (on sign-out or a new sign-in).
+  void clearCache() => _dashboardCache = null;
+
   Future<TeacherDashboard> getDashboard({bool refresh = false}) async {
     if (!refresh && _dashboardCache != null) return _dashboardCache!;
     final data = await ApiService.instance.get('/teacher/dashboard');

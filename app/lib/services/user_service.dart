@@ -11,6 +11,9 @@ class UserService {
   UserProfile? _profileCache;
   UserProfile? get cachedProfile => _profileCache;
 
+  /// Forgets the signed-in user's profile (on sign-out or a new sign-in).
+  void clearCache() => _profileCache = null;
+
   Future<UserProfile> getMe({bool refresh = false}) async {
     if (!refresh && _profileCache != null) return _profileCache!;
     final data = await _api.get('/me');

@@ -1,23 +1,39 @@
 import 'package:flutter/material.dart';
 import '../models/collection.dart';
 import '../models/deck.dart';
+import '../models/deck_selection.dart';
 import '../services/collection_service.dart';
 import '../services/deck_service.dart';
 import '../theme/app_theme.dart';
 
 /// Full-screen collection → deck picker shared by the study games.
+///
+/// With [onDeckSelected] a tap on a deck picks it straight away. With
+/// [onSelectionDone] the picker is multi-select: decks get checkboxes, each
+/// collection gets "Select all", and a Start button hands over the choice.
 class DeckPickerScreen extends StatefulWidget {
   const DeckPickerScreen({
     super.key,
     required this.title,
     required this.subtitle,
     required this.accentColor,
-    required this.onDeckSelected,
-  });
+    this.onDeckSelected,
+    this.onSelectionDone,
+    this.showBack = true,
+    @visibleForTesting this.loadCollections,
+    @visibleForTesting this.loadDecks,
+  }) : assert((onDeckSelected == null) != (onSelectionDone == null));
+
   final String title;
   final String subtitle;
   final Color accentColor;
-  final void Function(String id, String name) onDeckSelected;
+  final void Function(String id, String name)? onDeckSelected;
+  final void Function(DeckSelection selection)? onSelectionDone;
+  final bool showBack;
+
+  /// Test hooks: default to the API.
+  final Future<List<Collection>> Function()? loadCollections;
+  final Future<List<DeckSummary>> Function(String collectionId)? loadDecks;
 
   @override
   State<DeckPickerScreen> createState() => _DeckPickerScreenState();
@@ -29,6 +45,11 @@ class _DeckPickerScreenState extends State<DeckPickerScreen> {
   final Set<String> _expanded = {};
   bool _loading = true;
 
+  /// Picked decks in the order they were picked (multi-select only).
+  final Map<String, DeckRef> _picked = {};
+
+  bool get _multi => widget.onSelectionDone != null;
+
   @override
   void initState() {
     super.initState();
@@ -37,11 +58,26 @@ class _DeckPickerScreenState extends State<DeckPickerScreen> {
 
   Future<void> _loadCollections() async {
     try {
-      final cols = await CollectionService.instance.listCollections();
+      final cols = await (widget.loadCollections?.call() ??
+          CollectionService.instance.listCollections());
       if (mounted) setState(() { _collections = cols; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<List<DeckSummary>> _ensureDecks(String collectionId) async {
+    final cached = _decks[collectionId];
+    if (cached != null) return cached;
+    List<DeckSummary> decks;
+    try {
+      decks = await (widget.loadDecks?.call(collectionId) ??
+          DeckService.instance.listDecks(collectionId));
+    } catch (_) {
+      decks = [];
+    }
+    if (mounted) setState(() => _decks[collectionId] = decks);
+    return decks;
   }
 
   Future<void> _toggleCollection(String id) async {
@@ -50,18 +86,60 @@ class _DeckPickerScreenState extends State<DeckPickerScreen> {
       return;
     }
     setState(() => _expanded.add(id));
-    if (_decks[id] == null) {
-      try {
-        final decks = await DeckService.instance.listDecks(id);
-        if (mounted) setState(() => _decks[id] = decks);
-      } catch (_) {
-        if (mounted) setState(() => _decks[id] = []);
+    await _ensureDecks(id);
+  }
+
+  void _toggleDeck(DeckSummary deck) {
+    setState(() {
+      if (_picked.remove(deck.id) == null) {
+        _picked[deck.id] = DeckRef(id: deck.id, name: deck.name, cardCount: deck.cardCount);
+      }
+    });
+  }
+
+  bool _allPicked(List<DeckSummary>? decks) =>
+      decks != null && decks.isNotEmpty && decks.every((d) => _picked.containsKey(d.id));
+
+  /// "Select all" on a collection: picks every deck in it, or clears them
+  /// when all are picked already.
+  Future<void> _toggleWholeCollection(String collectionId) async {
+    setState(() => _expanded.add(collectionId));
+    final decks = await _ensureDecks(collectionId);
+    if (!mounted || decks.isEmpty) return;
+    final clear = _allPicked(decks);
+    setState(() {
+      for (final d in decks) {
+        if (clear) {
+          _picked.remove(d.id);
+        } else {
+          _picked[d.id] = DeckRef(id: d.id, name: d.name, cardCount: d.cardCount);
+        }
+      }
+    });
+  }
+
+  void _done() {
+    if (_picked.isEmpty) return;
+    final picked = _picked.values.toList();
+    final ids = picked.map((d) => d.id).toSet();
+    String? collectionName;
+    if (picked.length > 1) {
+      for (final col in _collections) {
+        final decks = _decks[col.id];
+        if (decks != null &&
+            decks.length == ids.length &&
+            decks.every((d) => ids.contains(d.id))) {
+          collectionName = col.name;
+          break;
+        }
       }
     }
+    widget.onSelectionDone!(DeckSelection(picked, collectionName: collectionName));
   }
 
   @override
   Widget build(BuildContext context) {
+    final words = _picked.values.fold(0, (sum, d) => sum + d.cardCount);
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       body: SafeArea(
@@ -74,24 +152,29 @@ class _DeckPickerScreenState extends State<DeckPickerScreen> {
               padding: const EdgeInsets.fromLTRB(8, 8, 20, 20),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.title,
-                          style: Theme.of(context)
-                              .textTheme
-                              .displayMedium
-                              ?.copyWith(color: Colors.white, fontSize: 22)),
-                      Text(widget.subtitle,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: Colors.white.withOpacity(0.8))),
-                    ],
+                  if (widget.showBack)
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  else
+                    const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .displayMedium
+                                ?.copyWith(color: Colors.white, fontSize: 22)),
+                        Text(widget.subtitle,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: Colors.white.withOpacity(0.8))),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -107,20 +190,55 @@ class _DeckPickerScreenState extends State<DeckPickerScreen> {
                           itemCount: _collections.length,
                           itemBuilder: (context, i) {
                             final col = _collections[i];
+                            final decks = _decks[col.id];
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _CollectionSection(
                                 collection: col,
                                 isOpen: _expanded.contains(col.id),
-                                decks: _decks[col.id],
+                                decks: decks,
                                 onToggle: () => _toggleCollection(col.id),
                                 accentColor: widget.accentColor,
-                                onDeckTap: widget.onDeckSelected,
+                                multiSelect: _multi,
+                                allPicked: _allPicked(decks),
+                                isPicked: (id) => _picked.containsKey(id),
+                                onSelectAll: () => _toggleWholeCollection(col.id),
+                                onDeckTap: (deck) => _multi
+                                    ? _toggleDeck(deck)
+                                    : widget.onDeckSelected!(deck.id, deck.name),
                               ),
                             );
                           },
                         ),
             ),
+            if (_multi && _picked.isNotEmpty)
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: GestureDetector(
+                    onTap: _done,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: const BoxDecoration(
+                        color: AppColors.orange,
+                        borderRadius: AppRadius.pill,
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Start · ${_picked.length} deck${_picked.length == 1 ? '' : 's'}'
+                          ' · $words word${words == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -159,6 +277,10 @@ class _CollectionSection extends StatelessWidget {
     required this.onToggle,
     required this.accentColor,
     required this.onDeckTap,
+    required this.multiSelect,
+    required this.allPicked,
+    required this.isPicked,
+    required this.onSelectAll,
   });
 
   final Collection collection;
@@ -166,7 +288,11 @@ class _CollectionSection extends StatelessWidget {
   final List<DeckSummary>? decks;
   final VoidCallback onToggle;
   final Color accentColor;
-  final void Function(String id, String name) onDeckTap;
+  final void Function(DeckSummary deck) onDeckTap;
+  final bool multiSelect;
+  final bool allPicked;
+  final bool Function(String deckId) isPicked;
+  final VoidCallback onSelectAll;
 
   @override
   Widget build(BuildContext context) {
@@ -223,6 +349,24 @@ class _CollectionSection extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (multiSelect && collection.deckCount > 0) ...[
+                    GestureDetector(
+                      onTap: onSelectAll,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: allPicked ? accentColor : accentColor.withOpacity(0.12),
+                          borderRadius: AppRadius.pill,
+                        ),
+                        child: Text(allPicked ? 'Clear' : 'Select all',
+                            style: TextStyle(
+                                color: allPicked ? Colors.white : accentColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   AnimatedRotation(
                     turns: isOpen ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
@@ -261,8 +405,10 @@ class _CollectionSection extends StatelessWidget {
                     deck: e.value,
                     color: collection.color,
                     accentColor: accentColor,
-                    onTap: () => onDeckTap(e.value.id, e.value.name),
+                    onTap: () => onDeckTap(e.value),
                     isLast: e.key == decks!.length - 1,
+                    multiSelect: multiSelect,
+                    picked: isPicked(e.value.id),
                   )),
           ],
         ],
@@ -278,6 +424,8 @@ class _DeckRow extends StatelessWidget {
     required this.accentColor,
     required this.onTap,
     required this.isLast,
+    required this.multiSelect,
+    required this.picked,
   });
 
   final DeckSummary deck;
@@ -285,6 +433,8 @@ class _DeckRow extends StatelessWidget {
   final Color accentColor;
   final VoidCallback onTap;
   final bool isLast;
+  final bool multiSelect;
+  final bool picked;
 
   @override
   Widget build(BuildContext context) {
@@ -325,18 +475,35 @@ class _DeckRow extends StatelessWidget {
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: accentColor,
-                borderRadius: AppRadius.pill,
+            if (multiSelect)
+              AnimatedContainer(
+                key: ValueKey('check-${deck.id}'),
+                duration: const Duration(milliseconds: 150),
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: picked ? accentColor : Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: picked ? accentColor : AppColors.fog, width: 2),
+                ),
+                child: picked
+                    ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                    : null,
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: AppRadius.pill,
+                ),
+                child: const Text('Select',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
               ),
-              child: const Text('Select',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
-            ),
           ],
         ),
       ),

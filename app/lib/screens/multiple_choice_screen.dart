@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/card.dart';
+import '../models/deck_selection.dart';
 import '../services/card_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
@@ -25,9 +26,23 @@ enum _Phase { pick, loading, quiz, complete }
 // ── Root screen ───────────────────────────────────────────────────────────
 
 class MultipleChoiceScreen extends StatefulWidget {
-  const MultipleChoiceScreen({super.key, this.deckId, this.deckName});
+  const MultipleChoiceScreen({
+    super.key,
+    this.deckId,
+    this.deckName,
+    this.selection,
+    @visibleForTesting this.loadCards,
+    @visibleForTesting this.reviewCard,
+  });
   final String? deckId;
   final String? deckName;
+
+  /// Several decks mixed into one quiz; wins over [deckId].
+  final DeckSelection? selection;
+
+  /// Test hooks: default to the API.
+  final Future<List<CardModel>> Function(String deckId)? loadCards;
+  final Future<void> Function(String cardId, bool correct)? reviewCard;
 
   @override
   State<MultipleChoiceScreen> createState() => _MultipleChoiceScreenState();
@@ -35,8 +50,8 @@ class MultipleChoiceScreen extends StatefulWidget {
 
 class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
   _Phase _phase = _Phase.pick;
-  String? _deckId;
-  String? _deckName;
+  /// The deck(s) being quizzed; null until picked.
+  DeckSelection? _selection;
   List<_Question> _questions = [];
   int _qi = 0;
   int _correct = 0;
@@ -45,23 +60,24 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
   @override
   void initState() {
     super.initState();
-    _deckId = widget.deckId;
-    _deckName = widget.deckName;
-    if (_deckId != null) _loadAndStart();
+    _selection = widget.selection ??
+        (widget.deckId == null
+            ? null
+            : DeckSelection.single(widget.deckId!, widget.deckName ?? ''));
+    if (_selection != null) _loadAndStart();
   }
 
-  void _onDeckSelected(String id, String name) {
-    setState(() {
-      _deckId = id;
-      _deckName = name;
-    });
+  void _onSelectionDone(DeckSelection selection) {
+    setState(() => _selection = selection);
     _loadAndStart();
   }
 
   Future<void> _loadAndStart() async {
     setState(() => _phase = _Phase.loading);
     try {
-      final cards = await CardService.instance.listCards(_deckId!);
+      final cards = await joinDeckCards(
+          _selection!.ids,
+          (id) => widget.loadCards?.call(id) ?? CardService.instance.listCards(id));
       if (!mounted) return;
       if (cards.length < 2) {
         setState(() => _phase = _Phase.pick);
@@ -74,8 +90,15 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
       final rng = Random();
       final shuffled = List<CardModel>.from(cards)..shuffle(rng);
       final questions = shuffled.map((card) {
-        final others = cards.where((c) => c.id != card.id).toList()..shuffle(rng);
-        final wrongAnswers = others.take(3).map((c) => c.translation).toList();
+        // Wrong options come from every chosen deck. Skip repeats and words
+        // with the same translation (the same word can sit in two decks).
+        final others = cards.where((c) => c.translation != card.translation).toList()
+          ..shuffle(rng);
+        final wrongAnswers = <String>[];
+        for (final c in others) {
+          if (wrongAnswers.length == 3) break;
+          if (!wrongAnswers.contains(c.translation)) wrongAnswers.add(c.translation);
+        }
         final options = [card.translation, ...wrongAnswers]..shuffle(rng);
         return _Question(
           card: card,
@@ -96,7 +119,8 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
   }
 
   void _onAnswer(bool correct) {
-    CardService.instance.reviewCard(_questions[_qi].card.id, correct).catchError((_) {});
+    (widget.reviewCard ?? CardService.instance.reviewCard)(_questions[_qi].card.id, correct)
+        .catchError((_) {});
     setState(() {
       if (correct) { _correct++; } else { _wrong++; }
     });
@@ -115,9 +139,9 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
     return switch (_phase) {
       _Phase.pick => DeckPickerScreen(
           title: 'Multiple choice',
-          subtitle: 'Choose a deck to quiz yourself',
+          subtitle: 'Pick one or more decks to quiz yourself',
           accentColor: AppColors.orange,
-          onDeckSelected: _onDeckSelected,
+          onSelectionDone: _onSelectionDone,
         ),
       _Phase.loading => const Scaffold(
           backgroundColor: AppColors.offWhite,
@@ -137,7 +161,7 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
           onNext: _nextQuestion,
         ),
       _Phase.complete => _CompletionScreen(
-          deckName: _deckName,
+          deckName: _selection?.label,
           total: _questions.length,
           correct: _correct,
           wrong: _wrong,

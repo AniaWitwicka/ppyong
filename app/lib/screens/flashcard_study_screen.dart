@@ -3,14 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/batch_test.dart';
 import '../models/card.dart';
-import '../models/collection.dart';
-import '../models/deck.dart';
+import '../models/deck_selection.dart';
 import '../models/study_queue.dart';
 import '../services/card_service.dart';
-import '../services/collection_service.dart';
-import '../services/deck_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/deck_picker.dart';
 import '../widgets/quiz_question.dart';
 
 enum _Direction { krToEn, enToKr }
@@ -22,12 +20,16 @@ class FlashcardStudyScreen extends StatefulWidget {
     super.key,
     this.deckName,
     this.deckId,
+    this.selection,
     this.isTab = false,
     this.loadCards,
     this.reviewCard,
   });
   final String? deckName;
   final String? deckId;
+
+  /// Several decks mixed into one session; wins over [deckId].
+  final DeckSelection? selection;
   final bool isTab;
 
   /// Test hooks: default to the API. `scope` is '' (all), 'due' or 'weak'.
@@ -45,8 +47,8 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   _Scope _scope = _Scope.all;
   _Phase _phase = _Phase.pick;
 
-  String? _deckId;
-  String? _deckName;
+  /// The deck(s) being studied; null until picked.
+  DeckSelection? _selection;
 
   /// Cards of the current session (a slice of [_queue]).
   List<CardModel> _cards = [];
@@ -66,7 +68,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   bool _testAfterBatch = true;
   bool _testing = false;
 
-  /// Wrong options for the test come from the whole deck.
+  /// Wrong options for the test come from all chosen decks.
   List<CardModel> _pool = [];
   BatchTest? _test;
   int _testCorrect = 0;
@@ -81,15 +83,21 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   @override
   void initState() {
     super.initState();
-    _deckId = widget.deckId;
-    _deckName = widget.deckName;
-    if (_deckId != null) _loadCounts();
+    _selection = widget.selection ??
+        (widget.deckId == null
+            ? null
+            : DeckSelection.single(widget.deckId!, widget.deckName ?? ''));
+    if (_selection != null) _loadCounts();
     _loadPrefs();
   }
 
   Future<List<CardModel>> _load(String deckId, String scope) =>
       widget.loadCards?.call(deckId, scope) ??
       CardService.instance.listCards(deckId, scope: scope);
+
+  /// Cards of every chosen deck for [scope], joined.
+  Future<List<CardModel>> _loadSelected(String scope) =>
+      joinDeckCards(_selection!.ids, (id) => _load(id, scope));
 
   static const _sessionSizeKey = 'study_session_size';
   static const _testAfterBatchKey = 'study_test_after_batch';
@@ -127,10 +135,12 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
         _Scope.weak => _weakCount,
       };
 
-  void _onDeckSelected(String id, String name) {
+  void _onSelectionDone(DeckSelection selection) {
     setState(() {
-      _deckId = id;
-      _deckName = name;
+      _selection = selection;
+      _totalCount = 0;
+      _dueCount = 0;
+      _weakCount = 0;
     });
     _loadCounts();
   }
@@ -138,9 +148,9 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   Future<void> _loadCounts() async {
     try {
       final results = await Future.wait([
-        _load(_deckId!, ''),
-        _load(_deckId!, 'due'),
-        _load(_deckId!, 'weak'),
+        _loadSelected(''),
+        _loadSelected('due'),
+        _loadSelected('weak'),
       ]);
       if (mounted) {
         setState(() {
@@ -164,13 +174,18 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
           : _scope == _Scope.weak
               ? 'weak'
               : '';
-      final cards = await _load(_deckId!, scope);
-      final pool = scope.isEmpty ? cards : await _load(_deckId!, '');
+      final selection = _selection!;
+      final cards = await _loadSelected(scope);
+      final pool = scope.isEmpty ? cards : await _loadSelected('');
       if (!mounted) return;
-      if (cards.isNotEmpty) {
+      // Mixed decks: shuffle so the queue mixes them inside each group
+      // (due → new → learning → mastered). One deck keeps deck order.
+      if (!selection.isSingle) cards.shuffle();
+      // The home Resume card opens one deck, so only one-deck sessions update it.
+      if (cards.isNotEmpty && selection.isSingle) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('last_deck_id', _deckId!);
-        await prefs.setString('last_deck_name', _deckName ?? '');
+        await prefs.setString('last_deck_id', selection.ids.first);
+        await prefs.setString('last_deck_name', selection.label);
       }
       final queue = StudyQueue(
         cards,
@@ -259,7 +274,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
       _test = null;
       _queue = null;
     });
-    if (_deckId != null) _loadCounts();
+    if (_selection != null) _loadCounts();
   }
 
   /// Continues with the next slice of the same queue — no repeats this sitting.
@@ -272,16 +287,20 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if ((_isTab || _deckId == null) && _phase == _Phase.pick) {
-      return _PickDeckPrompt(
-        isTab: _isTab,
-        onDeckSelected: _onDeckSelected,
+    if ((_isTab || _selection == null) && _phase == _Phase.pick) {
+      return DeckPickerScreen(
+        title: 'Choose decks',
+        subtitle: 'Pick one or more decks to study',
+        accentColor: AppColors.periwinkle,
+        showBack: !_isTab,
+        onSelectionDone: _onSelectionDone,
       );
     }
 
     if (_phase == _Phase.pick) {
       return _DirectionPickerScreen(
-        deckName: _deckName!,
+        deckName: _selection!.label,
+        deckCount: _selection!.decks.length,
         direction: _direction,
         scope: _scope,
         onDirectionChanged: (d) => setState(() => _direction = d),
@@ -303,7 +322,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
       final queue = _queue;
       final test = _test;
       return _SessionComplete(
-        deckName: _deckName,
+        deckName: _selection?.label,
         knewIt: _knewIt,
         again: _again,
         remembered: test?.remembered,
@@ -354,7 +373,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
         child: Column(
           children: [
             _StudyHeader(
-              deckName: widget.deckName ?? 'Study',
+              deckName: _selection?.label ?? 'Study',
               index: _cards.length - _learn.length,
               total: _cards.length,
               isTab: _isTab,
@@ -376,340 +395,12 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   }
 }
 
-// ── Deck picker ───────────────────────────────────────────────────────────
-
-class _PickDeckPrompt extends StatefulWidget {
-  const _PickDeckPrompt({
-    required this.isTab,
-    required this.onDeckSelected,
-  });
-
-  final bool isTab;
-  final void Function(String id, String name) onDeckSelected;
-
-  @override
-  State<_PickDeckPrompt> createState() => _PickDeckPromptState();
-}
-
-class _PickDeckPromptState extends State<_PickDeckPrompt> {
-  List<Collection> _collections = [];
-  // collectionId → decks (null = not yet loaded)
-  final Map<String, List<DeckSummary>?> _decks = {};
-  final Set<String> _expanded = {};
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCollections();
-  }
-
-  Future<void> _loadCollections() async {
-    try {
-      final cols = await CollectionService.instance.listCollections();
-      if (mounted) setState(() { _collections = cols; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _toggleCollection(String id) async {
-    if (_expanded.contains(id)) {
-      setState(() => _expanded.remove(id));
-      return;
-    }
-    setState(() => _expanded.add(id));
-    if (_decks[id] == null) {
-      try {
-        final decks = await DeckService.instance.listDecks(id);
-        if (mounted) setState(() => _decks[id] = decks);
-      } catch (_) {
-        if (mounted) setState(() => _decks[id] = []);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.offWhite,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // Header
-            Container(
-              width: double.infinity,
-              color: AppColors.periwinkle,
-              padding: const EdgeInsets.fromLTRB(8, 8, 20, 20),
-              child: Row(
-                children: [
-                  if (!widget.isTab)
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    )
-                  else
-                    const SizedBox(width: 20),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Choose a deck',
-                          style: Theme.of(context)
-                              .textTheme
-                              .displayMedium
-                              ?.copyWith(color: Colors.white, fontSize: 22)),
-                      Text('Select a deck to start studying',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: Colors.white.withOpacity(0.8))),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            // Body
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.periwinkle))
-                  : _collections.isEmpty
-                      ? _EmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-                          itemCount: _collections.length,
-                          itemBuilder: (context, i) {
-                            final col = _collections[i];
-                            final isOpen = _expanded.contains(col.id);
-                            final decks = _decks[col.id];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _CollectionSection(
-                                collection: col,
-                                isOpen: isOpen,
-                                decks: decks,
-                                onToggle: () => _toggleCollection(col.id),
-                                onDeckTap: widget.onDeckSelected,
-                              ),
-                            );
-                          },
-                        ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.library_books_rounded, size: 56, color: AppColors.fog),
-          SizedBox(height: 16),
-          Text('No collections yet',
-              style: TextStyle(color: AppColors.ash, fontSize: 16, fontWeight: FontWeight.w600)),
-          SizedBox(height: 6),
-          Text('Add decks in the Library tab first',
-              style: TextStyle(color: AppColors.fog, fontSize: 13)),
-        ],
-      ),
-    );
-  }
-}
-
-class _CollectionSection extends StatelessWidget {
-  const _CollectionSection({
-    required this.collection,
-    required this.isOpen,
-    required this.decks,
-    required this.onToggle,
-    required this.onDeckTap,
-  });
-
-  final Collection collection;
-  final bool isOpen;
-  final List<DeckSummary>? decks;
-  final VoidCallback onToggle;
-  final void Function(String id, String name) onDeckTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.all(Radius.circular(18)),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.ink.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Collection header row
-          InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.vertical(
-              top: const Radius.circular(18),
-              bottom: isOpen ? Radius.zero : const Radius.circular(18),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: collection.color.withOpacity(0.15),
-                      borderRadius: const BorderRadius.all(Radius.circular(12)),
-                    ),
-                    child: Center(
-                      child: Text(collection.emoji, style: const TextStyle(fontSize: 20)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(collection.name,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700)),
-                        Text('${collection.deckCount} deck${collection.deckCount == 1 ? '' : 's'}',
-                            style: Theme.of(context).textTheme.bodyMedium),
-                      ],
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: isOpen ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.fog, size: 22),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Deck list
-          if (isOpen) ...[
-            const Divider(height: 1, color: AppColors.border),
-            if (decks == null)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.periwinkle),
-                  ),
-                ),
-              )
-            else if (decks!.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('No decks in this collection',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: AppColors.fog)),
-              )
-            else
-              ...decks!.map((deck) => _DeckRow(
-                    deck: deck,
-                    color: collection.color,
-                    onTap: () => onDeckTap(deck.id, deck.name),
-                    isLast: deck == decks!.last,
-                  )),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _DeckRow extends StatelessWidget {
-  const _DeckRow({
-    required this.deck,
-    required this.color,
-    required this.onTap,
-    required this.isLast,
-  });
-
-  final DeckSummary deck;
-  final Color color;
-  final VoidCallback onTap;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: isLast
-          ? const BorderRadius.vertical(bottom: Radius.circular(18))
-          : BorderRadius.zero,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: isLast
-              ? null
-              : const Border(bottom: BorderSide(color: AppColors.border)),
-        ),
-        child: Row(
-          children: [
-            Container(width: 4, height: 36, decoration: BoxDecoration(
-              color: color,
-              borderRadius: const BorderRadius.all(Radius.circular(4)),
-            )),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(deck.name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontSize: 15)),
-                  Text('${deck.cardCount} cards',
-                      style: Theme.of(context).textTheme.bodyMedium),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.periwinkle,
-                borderRadius: AppRadius.pill,
-              ),
-              child: const Text('Select',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Direction picker screen ────────────────────────────────────────────────
 
 class _DirectionPickerScreen extends StatelessWidget {
   const _DirectionPickerScreen({
     required this.deckName,
+    this.deckCount = 1,
     required this.direction,
     required this.scope,
     required this.onDirectionChanged,
@@ -727,6 +418,7 @@ class _DirectionPickerScreen extends StatelessWidget {
   });
 
   final String deckName;
+  final int deckCount;
   final _Direction direction;
   final _Scope scope;
   final ValueChanged<_Direction> onDirectionChanged;
@@ -790,7 +482,9 @@ class _DirectionPickerScreen extends StatelessWidget {
                     Text('Ready to study?', style: Theme.of(context).textTheme.displayMedium),
                     const SizedBox(height: 4),
                     Text(
-                      '$totalCount cards in this deck',
+                      deckCount == 1
+                          ? '$totalCount cards in this deck'
+                          : '$totalCount cards in $deckCount decks',
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium

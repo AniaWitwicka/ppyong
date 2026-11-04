@@ -1,6 +1,13 @@
 import '../models/card.dart';
 import 'api_service.dart';
 
+/// Loads every deck with [load] in parallel and joins the cards in deck order.
+Future<List<CardModel>> joinDeckCards(
+    List<String> deckIds, Future<List<CardModel>> Function(String deckId) load) async {
+  final perDeck = await Future.wait(deckIds.map(load));
+  return [for (final cards in perDeck) ...cards];
+}
+
 class CardService {
   CardService._();
   static final CardService instance = CardService._();
@@ -12,6 +19,10 @@ class CardService {
     final data = await _api.get(path);
     return (data as List).map((e) => CardModel.fromJson(e as Map<String, dynamic>)).toList();
   }
+
+  /// Cards of several decks, loaded in parallel and joined in deck order.
+  Future<List<CardModel>> listCardsForDecks(List<String> deckIds, {String scope = ''}) =>
+      joinDeckCards(deckIds, (id) => listCards(id, scope: scope));
 
   Future<CardModel> createCard(
     String deckId, {

@@ -266,12 +266,11 @@ class _HeaderState extends State<_Header> {
                   children: [
                     Text(
                       '안녕하세요,',
-                      style: TextStyle(
+                      style: AppTheme.nunito(TextStyle(
                         color: Colors.white.withOpacity(0.85),
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        fontFamily: 'Nunito',
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -487,13 +486,12 @@ class _StatCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 value,
-                style: TextStyle(
-                  fontFamily: 'Nunito',
+                style: AppTheme.nunito(TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: textColor,
                   height: 1.1,
-                ),
+                )),
               ),
               const SizedBox(height: 3),
               Text(

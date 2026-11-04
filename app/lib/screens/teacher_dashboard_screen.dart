@@ -213,12 +213,11 @@ class _TeacherHeader extends StatelessWidget {
                         children: [
                           Text(
                             '안녕하세요,',
-                            style: TextStyle(
+                            style: AppTheme.nunito(TextStyle(
                               color: Colors.white.withOpacity(0.85),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              fontFamily: 'Nunito',
-                            ),
+                            )),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -415,24 +414,22 @@ class _StatTile extends StatelessWidget {
                 children: [
                   Text(
                     value,
-                    style: TextStyle(
-                      fontFamily: 'Nunito',
+                    style: AppTheme.nunito(TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: textColor,
                       height: 1.1,
-                    ),
+                    )),
                   ),
                   if (total != null) ...[
                     const SizedBox(width: 1),
                     Text(
                       '/$total',
-                      style: TextStyle(
-                        fontFamily: 'Nunito',
+                      style: AppTheme.nunito(TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: textColor.withOpacity(0.7),
-                      ),
+                      )),
                     ),
                   ],
                 ],
@@ -557,12 +554,11 @@ class _AttentionCard extends StatelessWidget {
                   children: [
                     Text(
                       item.name,
-                      style: const TextStyle(
+                      style: AppTheme.nunito(TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'Nunito',
                         color: AppColors.ink,
-                      ),
+                      )),
                     ),
                     const SizedBox(width: 6),
                     Container(
@@ -689,12 +685,11 @@ class _GroupCard extends StatelessWidget {
                     children: [
                       Text(
                         group.name,
-                        style: const TextStyle(
+                        style: AppTheme.nunito(TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          fontFamily: 'Nunito',
                           color: AppColors.ink,
-                        ),
+                        )),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -763,12 +758,11 @@ class _GroupCard extends StatelessWidget {
                 const Spacer(),
                 Text(
                   '${group.classAvg}%',
-                  style: const TextStyle(
-                    fontFamily: 'Nunito',
+                  style: AppTheme.nunito(TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
-                  ),
+                  )),
                 ),
               ],
             ),

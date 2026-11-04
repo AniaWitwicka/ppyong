@@ -53,6 +53,13 @@ class AppTheme {
         ],
       );
 
+  /// Nunito (headings, big numbers) with the Korean fallback.
+  /// Use this instead of `fontFamily: 'Nunito'`: google_fonts registers the
+  /// font under its own per-weight names, so a plain 'Nunito' is never found
+  /// and the text waits for Flutter's runtime fallback fonts (boxes meanwhile).
+  static TextStyle nunito(TextStyle style) =>
+      withKorean(GoogleFonts.nunito(textStyle: style));
+
   static TextTheme get _textTheme {
     return TextTheme(
       displayLarge: withKorean(GoogleFonts.nunito(

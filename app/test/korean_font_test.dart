@@ -40,6 +40,24 @@ void main() {
     expect(AppTheme.withKorean(once).fontFamilyFallback, ['Nunito', koreanFontFamily]);
   });
 
+  test('AppTheme.nunito uses the loaded Nunito, keeps the style and adds Korean', () {
+    late TextStyle style;
+    runZonedGuarded(
+        () => style = AppTheme.nunito(
+            const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, height: 1.1)),
+        (e, _) {
+      if (!'$e'.contains('google_fonts') && !'$e'.contains('Failed to load font')) throw e;
+    });
+    // A plain 'Nunito' is never registered by google_fonts, so such text waits
+    // for Flutter's runtime fallback fonts and shows boxes until they arrive.
+    expect(style.fontFamily, isNot('Nunito'));
+    expect(style.fontFamily, startsWith('Nunito_'));
+    expect(style.fontFamilyFallback, contains(koreanFontFamily));
+    expect(style.fontSize, 22);
+    expect(style.fontWeight, FontWeight.w800);
+    expect(style.height, 1.1);
+  });
+
   test('the font files are bundled, stay a small subset and register', () async {
     for (final file in koreanFontFiles) {
       final data = await rootBundle.load(file);

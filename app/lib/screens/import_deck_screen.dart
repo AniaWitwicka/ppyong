@@ -166,9 +166,9 @@ class _ImportDeckScreenState extends State<ImportDeckScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(
+        title: Text(
           'New collection',
-          style: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800),
+          style: AppTheme.nunito(const TextStyle(fontWeight: FontWeight.w800)),
         ),
         content: TextField(
           controller: nameCtrl,
@@ -848,12 +848,11 @@ class _PreviewCard extends StatelessWidget {
                   children: [
                     Text(
                       card.korean,
-                      style: const TextStyle(
+                      style: AppTheme.nunito(TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Nunito',
                         color: AppColors.ink,
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 2),
                     Text.rich(

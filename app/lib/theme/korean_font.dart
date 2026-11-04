@@ -11,6 +11,8 @@ import 'package:flutter/services.dart';
 /// boxes until it arrives (HRHTA-112).
 const koreanFontFamily = 'NotoSansKR';
 
+/// vercel.json caches assets/fonts for a year, so a phone downloads these
+/// once. If the font files ever change, give them new file names.
 const koreanFontFiles = [
   'assets/fonts/NotoSansKR-Regular.ttf',
   'assets/fonts/NotoSansKR-Bold.ttf',
@@ -24,11 +26,13 @@ void resetKoreanFontForTest() => _loading = null;
 /// Registers the Korean font. Safe to call more than once.
 ///
 /// web/index.html starts downloading the files while the app code is still
-/// loading, so this is usually instant. It never throws and never waits
-/// longer than [timeout]: on a very slow network the app starts anyway and
-/// the font is used as soon as it arrives.
+/// loading, and after the first visit it comes from the phone's cache, so
+/// this is usually instant. It never throws and never waits longer than
+/// [timeout]: on a very slow first visit the app starts anyway and the font
+/// is used as soon as it arrives. The wait is generous on purpose: Korean
+/// shown as boxes is worse than a slightly later start.
 Future<void> loadKoreanFont({
-  Duration timeout = const Duration(seconds: 4),
+  Duration timeout = const Duration(seconds: 12),
   AssetBundle? bundle,
 }) {
   _loading ??= () async {

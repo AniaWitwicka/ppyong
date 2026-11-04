@@ -2,10 +2,10 @@ import 'card.dart';
 
 /// Splits a deck into short study sessions.
 ///
-/// Cards are ordered once when the queue is built — due reviews first, then
-/// new words, then words still being learned, then mastered ones — keeping
-/// deck order inside each group. Sessions are consecutive slices of that
-/// order, so "next session" never repeats a word from this sitting.
+/// Cards are ordered once when the queue is built, least known first (see
+/// [orderForStudy]). Sessions are consecutive slices of that order, so "next
+/// session" never repeats a word from this sitting, and a new sitting starts
+/// with other words, since the ones just studied move back (HRHTA-115).
 class StudyQueue {
   StudyQueue(List<CardModel> cards, {required this.sessionSize, DateTime? today})
       : assert(sessionSize > 0),
@@ -46,21 +46,41 @@ class StudyQueue {
     if (hasNextSession) _start += sessionSize;
   }
 
-  /// Due reviews → new → learning (not due yet) → mastered (not due yet),
-  /// keeping the incoming (deck) order inside each group.
+  /// Least known first:
+  /// 1. missed words ("Again", not due yet),
+  /// 2. due reviews,
+  /// 3. new words,
+  /// 4. the rest: learning before mastered, shortest review gap first.
+  /// Inside a group, shorter gap first, then the word seen longest ago, then
+  /// deck order. Studying a word moves it back in its group, so sessions
+  /// rotate instead of showing the same words again.
   static List<CardModel> orderForStudy(List<CardModel> cards, DateTime today) {
     final day = DateTime(today.year, today.month, today.day);
-    int rank(CardModel c) {
-      if (c.status == CardStatus.newCard) return 1;
+    int group(CardModel c) {
+      if (c.isNew) return 2;
       final due = c.dueDate;
-      if (due != null && !DateTime(due.year, due.month, due.day).isAfter(day)) return 0;
-      return c.status == CardStatus.learning ? 2 : 3;
+      if (due != null && !DateTime(due.year, due.month, due.day).isAfter(day)) return 1;
+      if (c.status == CardStatus.newCard) return 0; // reviewed, reset by "Again"
+      return c.status == CardStatus.learning ? 3 : 4;
     }
 
-    final indexed = [for (var i = 0; i < cards.length; i++) (i, cards[i])];
+    int byLastSeen(CardModel a, CardModel b) {
+      final x = a.lastReviewed, y = b.lastReviewed;
+      if (x == null || y == null) return (x == null ? 0 : 1) - (y == null ? 0 : 1);
+      return x.compareTo(y);
+    }
+
+    final indexed = [for (var i = 0; i < cards.length; i++) (i, cards[i], group(cards[i]))];
     indexed.sort((a, b) {
-      final byRank = rank(a.$2).compareTo(rank(b.$2));
-      return byRank != 0 ? byRank : a.$1.compareTo(b.$1);
+      var r = a.$3.compareTo(b.$3);
+      if (r != 0) return r;
+      if (a.$3 != 2) {
+        r = a.$2.intervalDays.compareTo(b.$2.intervalDays);
+        if (r != 0) return r;
+        r = byLastSeen(a.$2, b.$2);
+        if (r != 0) return r;
+      }
+      return a.$1.compareTo(b.$1);
     });
     return [for (final e in indexed) e.$2];
   }

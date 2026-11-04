@@ -9,6 +9,8 @@ class CardModel {
     required this.notes,
     required this.status,
     this.dueDate,
+    this.lastReviewed,
+    this.intervalDays = 0,
   });
 
   final String id;
@@ -19,6 +21,16 @@ class CardModel {
   final CardStatus status;
   final DateTime? dueDate;
 
+  /// Last time the user answered this word; null = never studied.
+  final DateTime? lastReviewed;
+
+  /// Current review gap in days: shorter = less known.
+  final int intervalDays;
+
+  /// Never studied. Sharing a deck makes "new"-looking rows that were never
+  /// reviewed; a word reset by "Again" has been reviewed, so it isn't new.
+  bool get isNew => status == CardStatus.newCard && lastReviewed == null;
+
   factory CardModel.fromJson(Map<String, dynamic> j) => CardModel(
         id: j['id'] as String,
         korean: j['korean'] as String,
@@ -27,6 +39,10 @@ class CardModel {
         notes: j['notes'] as String? ?? '',
         status: _parseStatus(j['status'] as String? ?? 'new'),
         dueDate: j['due_date'] == null ? null : DateTime.tryParse(j['due_date'] as String),
+        lastReviewed: j['last_reviewed'] == null
+            ? null
+            : DateTime.tryParse(j['last_reviewed'] as String),
+        intervalDays: (j['interval_days'] as num?)?.toInt() ?? 0,
       );
 
   static CardStatus _parseStatus(String s) => switch (s) {

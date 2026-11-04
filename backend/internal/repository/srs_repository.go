@@ -50,13 +50,32 @@ func (r *SRSRepository) Review(ctx context.Context, cardID, userID string, knewI
 	// Fetch current progress (or use SM-2 defaults on first review)
 	var easeFactor float64
 	var intervalDays, repetitions int
+	var notDueYet bool
+	var daysSinceReview int
 	err := r.pool.QueryRow(ctx, `
-		SELECT ease_factor, interval_days, repetitions
+		SELECT ease_factor, interval_days, repetitions, due_date > CURRENT_DATE,
+		       COALESCE(CURRENT_DATE - last_reviewed::date, 0)
 		FROM srs_progress
 		WHERE card_id = $1 AND user_id = $2
-	`, cardID, userID).Scan(&easeFactor, &intervalDays, &repetitions)
+	`, cardID, userID).Scan(&easeFactor, &intervalDays, &repetitions, &notDueYet, &daysSinceReview)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
+	}
+
+	// Early "knew it" (before the due date): the level only grows as much as
+	// the real time since the last review supports. Passing a word three times
+	// in a day no longer makes it "mastered" (HRHTA-115). "Again" always counts.
+	if err == nil && knewIt && notDueYet {
+		// A missed word answered right again: back to learning, still due
+		// tomorrow, so it stops jumping to the front of every session.
+		if repetitions == 0 {
+			return r.save(ctx, cardID, userID, easeFactor, intervalDays, 1, intervalDays)
+		}
+		earned, grows := service.SRSEarlyInterval(intervalDays, daysSinceReview, easeFactor)
+		if !grows {
+			return r.notePractice(ctx, cardID, userID)
+		}
+		return r.save(ctx, cardID, userID, easeFactor, earned, repetitions+1, intervalDays)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		easeFactor = 2.5
@@ -70,9 +89,15 @@ func (r *SRSRepository) Review(ctx context.Context, cardID, userID string, knewI
 	if !knewIt {
 		newRepetitions = 0
 	}
+	return r.save(ctx, cardID, userID, newEF, newInterval, newRepetitions, intervalDays)
+}
 
+// save writes the new schedule, logs mastery when a word first reaches a
+// 7+ day interval, and counts the day toward the streak.
+func (r *SRSRepository) save(ctx context.Context, cardID, userID string,
+	newEF float64, newInterval, newRepetitions, oldInterval int) (*model.SRSProgress, error) {
 	var sp model.SRSProgress
-	err = r.pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO srs_progress
 			(user_id, card_id, ease_factor, interval_days, repetitions, due_date, last_reviewed)
 		VALUES
@@ -93,12 +118,31 @@ func (r *SRSRepository) Review(ctx context.Context, cardID, userID string, knewI
 	}
 
 	// Log mastery the first time a card crosses the mastered threshold (interval_days < 7 → >= 7).
-	if knewIt && intervalDays < 7 && newInterval >= 7 {
+	if oldInterval < 7 && newInterval >= 7 {
 		go r.logMastery(cardID, userID)
 	}
 
 	_ = r.touchStreak(ctx, userID)
 
+	return &sp, nil
+}
+
+// notePractice records an early "knew it": only last_reviewed changes (so
+// practice rotates) and the day counts toward the streak.
+func (r *SRSRepository) notePractice(ctx context.Context, cardID, userID string) (*model.SRSProgress, error) {
+	var sp model.SRSProgress
+	err := r.pool.QueryRow(ctx, `
+		UPDATE srs_progress SET last_reviewed = NOW()
+		WHERE card_id = $1 AND user_id = $2
+		RETURNING id, user_id, card_id, ease_factor, interval_days, repetitions, due_date, last_reviewed
+	`, cardID, userID).Scan(
+		&sp.ID, &sp.UserID, &sp.CardID, &sp.EaseFactor,
+		&sp.IntervalDays, &sp.Repetitions, &sp.DueDate, &sp.LastReviewed,
+	)
+	if err != nil {
+		return nil, err
+	}
+	_ = r.touchStreak(ctx, userID)
 	return &sp, nil
 }
 

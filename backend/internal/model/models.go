@@ -169,6 +169,11 @@ type CardSummary struct {
 	Notes        string     `json:"notes"`
 	Status       string     `json:"status"` // "new" | "learning" | "mastered"
 	DueDate      *time.Time `json:"due_date"`
+	// When the user last answered this word; the app practises the ones
+	// seen longest ago first, so practice rotates (HRHTA-115).
+	LastReviewed *time.Time `json:"last_reviewed"`
+	// Current review gap; the app studies the shortest gaps (least known) first.
+	IntervalDays int `json:"interval_days"`
 }
 
 // WeakCard is returned by GET /me/weak-words — cards the user struggles with.

@@ -57,7 +57,9 @@ const cardSelectCols = `
 		WHEN sp.interval_days >= 7 THEN 'mastered'
 		ELSE 'learning'
 	END AS status,
-	sp.due_date
+	sp.due_date,
+	sp.last_reviewed,
+	COALESCE(sp.interval_days, 0) AS interval_days
 `
 
 func (r *CardRepository) List(ctx context.Context, deckID, userID, scope string) ([]model.CardSummary, error) {
@@ -86,7 +88,7 @@ func (r *CardRepository) List(ctx context.Context, deckID, userID, scope string)
 	var cards []model.CardSummary
 	for rows.Next() {
 		var c model.CardSummary
-		if err := rows.Scan(&c.ID, &c.Korean, &c.Romanisation, &c.Translation, &c.Notes, &c.Status, &c.DueDate); err != nil {
+		if err := rows.Scan(&c.ID, &c.Korean, &c.Romanisation, &c.Translation, &c.Notes, &c.Status, &c.DueDate, &c.LastReviewed, &c.IntervalDays); err != nil {
 			return nil, err
 		}
 		cards = append(cards, c)
@@ -132,9 +134,9 @@ func (r *CardRepository) Update(ctx context.Context, id string, korean, romanisa
 	}
 	var c model.CardSummary
 	err = r.pool.QueryRow(ctx, `
-		SELECT id, korean, COALESCE(romanisation,''), translation, COALESCE(notes,''), 'new', NULL
+		SELECT id, korean, COALESCE(romanisation,''), translation, COALESCE(notes,''), 'new', NULL, NULL, 0
 		FROM cards WHERE id = $1
-	`, id).Scan(&c.ID, &c.Korean, &c.Romanisation, &c.Translation, &c.Notes, &c.Status, &c.DueDate)
+	`, id).Scan(&c.ID, &c.Korean, &c.Romanisation, &c.Translation, &c.Notes, &c.Status, &c.DueDate, &c.LastReviewed, &c.IntervalDays)
 	if err != nil {
 		return nil, err
 	}

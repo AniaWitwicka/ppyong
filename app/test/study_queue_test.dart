@@ -80,4 +80,62 @@ void main() {
     expect(q.hasNextSession, isFalse);
     expect(q.sessionCount, 1);
   });
+
+  test('least known first: missed, due, new, then shortest gap', () {
+    final cards = [
+      seen('mastered16', CardStatus.mastered, due: DateTime(2026, 11, 19), last: DateTime(2026, 11, 3), interval: 16),
+      card('new', CardStatus.newCard),
+      seen('learning6', CardStatus.learning, due: DateTime(2026, 11, 9), last: DateTime(2026, 11, 3), interval: 6),
+      seen('learning1', CardStatus.learning, due: DateTime(2026, 11, 4), last: DateTime(2026, 11, 3), interval: 1),
+      seen('due', CardStatus.learning, due: DateTime(2026, 11, 3), last: DateTime(2026, 11, 2), interval: 1),
+      // "Again" today: reset to 0 repetitions (API says "new"), due tomorrow.
+      seen('missed', CardStatus.newCard, due: DateTime(2026, 11, 4), last: DateTime(2026, 11, 3, 14), interval: 1),
+    ];
+    expect(ids(StudyQueue.orderForStudy(cards, today)),
+        ['missed', 'due', 'new', 'learning1', 'learning6', 'mastered16']);
+  });
+
+  test('a new sitting starts with other words: the ones just studied move back', () {
+    // Deck fully studied, nothing due: ten 1-day words seen yesterday, and
+    // the first five of them practised again a minute ago.
+    final yesterday = DateTime(2026, 11, 2, 18);
+    final justNow = DateTime(2026, 11, 3, 15, 29);
+    final cards = [
+      for (var i = 0; i < 10; i++)
+        seen('w$i', CardStatus.learning,
+            due: DateTime(2026, 11, 4), last: i < 5 ? justNow : yesterday),
+    ];
+    final next = StudyQueue(cards, sessionSize: 5, today: today).session;
+    expect(ids(next), ['w5', 'w6', 'w7', 'w8', 'w9']);
+  });
+
+  test('last_reviewed and interval_days come from the API', () {
+    final c = CardModel.fromJson({
+      'id': 'c1', 'korean': 'k', 'translation': 't', 'status': 'learning',
+      'due_date': '2026-11-05T00:00:00Z',
+      'last_reviewed': '2026-11-04T16:15:53.015695+01:00',
+      'interval_days': 6,
+    });
+    expect(c.lastReviewed, isNotNull);
+    expect(c.intervalDays, 6);
+    expect(c.isNew, isFalse);
+    final missed = CardModel.fromJson({
+      'id': 'c2', 'korean': 'k', 'translation': 't', 'status': 'new',
+      'due_date': '2026-11-05T00:00:00Z', 'last_reviewed': '2026-11-04T10:00:00Z',
+    });
+    expect(missed.isNew, isFalse, reason: 'reset by Again, not a new word');
+    final shared = CardModel.fromJson({
+      'id': 'c3', 'korean': 'k', 'translation': 't', 'status': 'new',
+      'due_date': '2026-11-04T00:00:00Z', 'last_reviewed': null,
+    });
+    expect(shared.isNew, isTrue);
+  });
+
 }
+
+CardModel seen(String id, CardStatus status,
+        {required DateTime due, required DateTime last, int interval = 1}) =>
+    CardModel(
+      id: id, korean: id, romanisation: '', translation: id, notes: '',
+      status: status, dueDate: due, lastReviewed: last, intervalDays: interval,
+    );

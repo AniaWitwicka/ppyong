@@ -63,6 +63,9 @@ func (h *ImportHandler) Preview(w http.ResponseWriter, r *http.Request) {
 // BulkCreate inserts up to 200 cards into an existing deck in a single transaction.
 // POST /decks/:id/cards/bulk
 func (h *ImportHandler) BulkCreate(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.cardRepo.CanEditDeck(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req struct {
 		Cards []model.ParsedCard `json:"cards"`
 	}

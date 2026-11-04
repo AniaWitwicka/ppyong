@@ -81,17 +81,19 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
-      floatingActionButton: FloatingActionButton(
-        heroTag: null,
-        onPressed: () async {
-          await showAddFlashcardSheet(context,
-              deckId: widget.deckId, deckName: deck.name, cardCount: _cards.length);
-          _load();
-        },
-        backgroundColor: AppColors.orange,
-        elevation: 4,
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
+      floatingActionButton: deck.canEdit
+          ? FloatingActionButton(
+              heroTag: null,
+              onPressed: () async {
+                await showAddFlashcardSheet(context,
+                    deckId: widget.deckId, deckName: deck.name, cardCount: _cards.length);
+                _load();
+              },
+              backgroundColor: AppColors.orange,
+              elevation: 4,
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -102,6 +104,7 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
               deckName: deck.name,
               description: deck.description,
               onEditSaved: _load,
+              canEdit: deck.canEdit,
             ),
             Expanded(
               child: ListView(
@@ -143,8 +146,10 @@ class _TopBar extends StatelessWidget {
     required this.deckName,
     this.description,
     this.onEditSaved,
+    this.canEdit = false,
   });
 
+  final bool canEdit;
   final String collectionName;
   final Color accentColor;
   final String deckId;
@@ -188,6 +193,7 @@ class _TopBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (canEdit) ...[
           const SizedBox(width: 12),
           GestureDetector(
             onTap: () => showDeckShareDialog(context, deckId: deckId, deckName: deckName),
@@ -241,6 +247,7 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           ),
+          ],
         ],
       ),
     );

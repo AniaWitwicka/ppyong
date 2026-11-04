@@ -10,6 +10,7 @@ class Collection {
     required this.wordCount,
     required this.dueCount,
     required this.progress,
+    this.canEdit = false,
   });
 
   final String id;
@@ -21,6 +22,9 @@ class Collection {
   final int dueCount;
   final double progress;
 
+  /// The signed-in user created it or is an admin, so they may add, edit and share.
+  final bool canEdit;
+
   factory Collection.fromJson(Map<String, dynamic> j) => Collection(
         id: j['id'] as String,
         name: j['name'] as String,
@@ -30,6 +34,7 @@ class Collection {
         wordCount: j['word_count'] as int,
         dueCount: j['due_count'] as int,
         progress: (j['progress'] as num).toDouble(),
+        canEdit: j['can_edit'] as bool? ?? false,
       );
 
   static Color _hexToColor(String hex) {

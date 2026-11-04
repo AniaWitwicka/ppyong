@@ -8,6 +8,29 @@ import 'home_screen.dart';
 import 'forgot_password_screen.dart';
 import 'pending_approval_screen.dart';
 
+/// What to tell someone whose registration failed, from the server's answer.
+(String, String) registerErrorMessage(Object error) {
+  if (error is! ApiException) {
+    return ("Couldn't reach Ppyong", 'Check your connection and try again');
+  }
+  switch (error.statusCode) {
+    case 409:
+      return ('This email already has an account', 'Log in instead, or use Forgot password');
+    case 403:
+      return ('Registration is by invitation', 'Ask your teacher to add your email first');
+    case 429:
+      return ('Too many tries', 'Wait a minute and try again');
+    case 400:
+      final msg = error.message.trim();
+      return (
+        'Registration failed',
+        msg.isEmpty ? 'Check your details and try again' : msg[0].toUpperCase() + msg.substring(1),
+      );
+    default:
+      return ('Registration failed', 'Something went wrong on our side — try again in a moment');
+  }
+}
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -332,13 +355,11 @@ class _RegisterFormState extends State<_RegisterForm> {
         context,
         MaterialPageRoute(builder: (_) => activated ? const HomeScreen() : const PendingApprovalScreen()),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      showAppToast(context,
-          variant: ToastVariant.error,
-          title: 'Registration failed',
-          subtitle: 'Email may already be in use');
+      final (title, subtitle) = registerErrorMessage(e);
+      showAppToast(context, variant: ToastVariant.error, title: title, subtitle: subtitle);
     }
   }
 

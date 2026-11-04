@@ -76,16 +76,18 @@ func (r *DeckRepository) GetByID(ctx context.Context, id, userID string) (*model
 			                    AND sp.repetitions > 0 THEN ca.id END)              AS learning_count,
 			COUNT(DISTINCT CASE WHEN sp.card_id IS NULL
 			                    OR (sp.user_id = $2 AND sp.repetitions = 0)
-			                    THEN ca.id END)                                      AS new_count
+			                    THEN ca.id END)                                      AS new_count,
+			(c.created_by = $2 OR EXISTS (SELECT 1 FROM users u
+			  WHERE u.id = $2 AND u.role = 'admin'))                               AS can_edit
 		FROM decks d
 		JOIN collections c ON c.id = d.collection_id
 		LEFT JOIN cards ca ON ca.deck_id = d.id
 		LEFT JOIN srs_progress sp ON sp.card_id = ca.id AND sp.user_id = $2
 		WHERE d.id = $1
-		GROUP BY d.id, d.title, d.description, d.collection_id, c.title
+		GROUP BY d.id, d.title, d.description, d.collection_id, c.title, c.created_by
 	`, id, userID).Scan(
 		&d.ID, &d.Name, &d.Description, &d.CollectionID, &d.CollectionName,
-		&d.CardCount, &d.MasteredCount, &d.LearningCount, &d.NewCount,
+		&d.CardCount, &d.MasteredCount, &d.LearningCount, &d.NewCount, &d.CanEdit,
 	)
 	if err != nil {
 		return nil, err
@@ -126,6 +128,7 @@ func (r *DeckRepository) Update(ctx context.Context, id string, name, descriptio
 	if err != nil {
 		return nil, err
 	}
+	d.CanEdit = true // only someone allowed to edit gets this far
 	return &d, nil
 }
 

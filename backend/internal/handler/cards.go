@@ -28,6 +28,9 @@ func (h *CardHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEditDeck(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req struct {
 		Korean       string `json:"korean"`
 		Romanisation string `json:"romanisation"`
@@ -51,6 +54,9 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CardHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req struct {
 		Korean       *string `json:"korean"`
 		Romanisation *string `json:"romanisation"`
@@ -70,6 +76,9 @@ func (h *CardHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CardHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	if err := h.repo.Delete(r.Context(), r.PathValue("id")); err != nil {
 		writeServerError(w, r, err)
 		return

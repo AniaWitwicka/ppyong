@@ -39,6 +39,7 @@ class DeckDetail {
     required this.masteredCount,
     required this.learningCount,
     required this.newCount,
+    this.canEdit = false,
   });
 
   final String id;
@@ -51,6 +52,9 @@ class DeckDetail {
   final int learningCount;
   final int newCount;
 
+  /// The signed-in user owns the deck's collection or is an admin, so they may change it.
+  final bool canEdit;
+
   factory DeckDetail.fromJson(Map<String, dynamic> j) => DeckDetail(
         id: j['id'] as String,
         name: j['name'] as String,
@@ -61,5 +65,6 @@ class DeckDetail {
         masteredCount: j['mastered_count'] as int,
         learningCount: j['learning_count'] as int,
         newCount: j['new_count'] as int,
+        canEdit: j['can_edit'] as bool? ?? false,
       );
 }

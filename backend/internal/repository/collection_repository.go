@@ -31,7 +31,9 @@ const summaryQuery = `
 		     ELSE COUNT(DISTINCT CASE WHEN sp.interval_days >= 7
 		                               AND sp.user_id = $1 THEN ca.id END)::float
 		          / COUNT(DISTINCT ca.id)
-		END                                                         AS progress
+		END                                                         AS progress,
+		(c.created_by = $1 OR EXISTS (SELECT 1 FROM users u
+		  WHERE u.id = $1 AND u.role = 'admin'))                   AS can_edit
 	FROM collections c
 	LEFT JOIN decks d   ON d.collection_id = c.id
 	LEFT JOIN cards ca  ON ca.deck_id = d.id
@@ -46,7 +48,7 @@ func (r *CollectionRepository) List(ctx context.Context, userID string) ([]model
 			JOIN srs_progress sp2 ON sp2.card_id = ca2.id AND sp2.user_id = $1
 			WHERE d2.collection_id = c.id
 		)
-		GROUP BY c.id, c.title, c.emoji, c.color
+		GROUP BY c.id, c.title, c.emoji, c.color, c.created_by
 		ORDER BY c.created_at DESC
 	`, userID)
 	if err != nil {
@@ -58,7 +60,7 @@ func (r *CollectionRepository) List(ctx context.Context, userID string) ([]model
 	for rows.Next() {
 		var c model.CollectionSummary
 		if err := rows.Scan(&c.ID, &c.Name, &c.Emoji, &c.Color,
-			&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress); err != nil {
+			&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress, &c.CanEdit); err != nil {
 			return nil, err
 		}
 		collections = append(collections, c)
@@ -73,9 +75,9 @@ func (r *CollectionRepository) GetByID(ctx context.Context, id, userID string) (
 	var c model.CollectionSummary
 	err := r.pool.QueryRow(ctx, summaryQuery+`
 		WHERE c.id = $2
-		GROUP BY c.id, c.title, c.emoji, c.color
+		GROUP BY c.id, c.title, c.emoji, c.color, c.created_by
 	`, userID, id).Scan(&c.ID, &c.Name, &c.Emoji, &c.Color,
-		&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress)
+		&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress, &c.CanEdit)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (r *CollectionRepository) Create(ctx context.Context, userID, name, emoji, 
 		return nil, err
 	}
 	return &model.CollectionSummary{
-		ID: id, Name: name, Emoji: emoji, Color: color,
+		ID: id, Name: name, Emoji: emoji, Color: color, CanEdit: true,
 	}, nil
 }
 
@@ -116,6 +118,7 @@ func (r *CollectionRepository) Update(ctx context.Context, id string, name, emoj
 	if err != nil {
 		return nil, err
 	}
+	c.CanEdit = true // only someone allowed to edit gets this far
 	return &c, nil
 }
 

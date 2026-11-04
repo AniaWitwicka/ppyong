@@ -672,6 +672,7 @@ class _CollectionTile extends StatelessWidget {
             collectionId: collection.id,
             collectionName: collection.name,
             accentColor: collection.color,
+            canEdit: collection.canEdit,
           ),
         ),
       ),

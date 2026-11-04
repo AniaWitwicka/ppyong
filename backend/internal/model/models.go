@@ -75,6 +75,8 @@ type CollectionSummary struct {
 	WordCount int     `json:"word_count"`
 	DueCount  int     `json:"due_count"`
 	Progress  float64 `json:"progress"` // 0.0–1.0
+	// CanEdit: the signed-in user owns it or is an admin, so may change it.
+	CanEdit bool `json:"can_edit"`
 }
 
 // CreateCollectionRequest is the body for POST /collections.
@@ -121,6 +123,8 @@ type DeckDetail struct {
 	MasteredCount  int    `json:"mastered_count"`
 	LearningCount  int    `json:"learning_count"`
 	NewCount       int    `json:"new_count"`
+	// CanEdit: the signed-in user owns the deck's collection or is an admin.
+	CanEdit bool `json:"can_edit"`
 }
 
 // CreateDeckRequest is the body for POST /collections/:id/decks.

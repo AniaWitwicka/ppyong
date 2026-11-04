@@ -15,11 +15,15 @@ class CollectionDetailScreen extends StatefulWidget {
     required this.collectionId,
     required this.collectionName,
     required this.accentColor,
+    this.canEdit = false,
   });
 
   final String collectionId;
   final String collectionName;
   final Color accentColor;
+
+  /// Only the owner (or an admin) gets Add deck and Share; everyone else just studies.
+  final bool canEdit;
 
   @override
   State<CollectionDetailScreen> createState() => _CollectionDetailScreenState();
@@ -79,13 +83,15 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
-      floatingActionButton: FloatingActionButton(
-        heroTag: null,
-        onPressed: _showAddDeckSheet,
-        backgroundColor: AppColors.orange,
-        elevation: 4,
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
+      floatingActionButton: widget.canEdit
+          ? FloatingActionButton(
+              heroTag: null,
+              onPressed: _showAddDeckSheet,
+              backgroundColor: AppColors.orange,
+              elevation: 4,
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -93,6 +99,7 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
               collectionId: widget.collectionId,
               collectionName: widget.collectionName,
               accentColor: widget.accentColor,
+              canEdit: widget.canEdit,
             ),
             Expanded(child: _buildBody()),
           ],
@@ -122,7 +129,7 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
             Text('No decks yet',
                 style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 8),
-            Text('Add a deck to get started',
+            Text(widget.canEdit ? 'Add a deck to get started' : 'Nothing to study here yet',
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium
@@ -139,6 +146,7 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
       itemBuilder: (context, i) => _DeckRow(
         deck: _decks[i],
         accentColor: widget.accentColor,
+        canEdit: widget.canEdit,
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
@@ -156,7 +164,13 @@ class _CollectionDetailScreenState extends State<CollectionDetailScreen> {
 // ── Header ────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
-  const _Header({required this.collectionId, required this.collectionName, required this.accentColor});
+  const _Header({
+    required this.collectionId,
+    required this.collectionName,
+    required this.accentColor,
+    required this.canEdit,
+  });
+  final bool canEdit;
   final String collectionId;
   final String collectionName;
   final Color accentColor;
@@ -191,6 +205,7 @@ class _Header extends StatelessWidget {
                   ),
             ),
           ),
+          if (canEdit) ...[
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () => showCollectionShareDialog(
@@ -214,6 +229,7 @@ class _Header extends StatelessWidget {
               ),
             ),
           ),
+          ],
         ],
       ),
     );
@@ -223,8 +239,14 @@ class _Header extends StatelessWidget {
 // ── Deck row ──────────────────────────────────────────────────────────────
 
 class _DeckRow extends StatelessWidget {
-  const _DeckRow({required this.deck, required this.accentColor, required this.onTap});
+  const _DeckRow({
+    required this.deck,
+    required this.accentColor,
+    required this.onTap,
+    required this.canEdit,
+  });
   final DeckSummary deck;
+  final bool canEdit;
   final Color accentColor;
   final VoidCallback onTap;
 
@@ -261,6 +283,7 @@ class _DeckRow extends StatelessWidget {
                         ),
                   ),
                 ),
+                if (canEdit)
                 GestureDetector(
                   onTap: () => showDeckShareDialog(context, deckId: deck.id, deckName: deck.name),
                   child: Container(

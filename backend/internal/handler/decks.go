@@ -35,6 +35,9 @@ func (h *DeckHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DeckHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEditCollection(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req model.CreateDeckRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -53,10 +56,19 @@ func (h *DeckHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DeckHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req model.UpdateDeckRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+	if req.CollectionID != nil {
+		ok, err := h.repo.CanEditCollection(r.Context(), *req.CollectionID, userIDFromContext(r))
+		if !allowEdit(w, r, ok, err) {
+			return
+		}
 	}
 	deck, err := h.repo.Update(r.Context(), r.PathValue("id"), req.Name, req.Description, req.CollectionID)
 	if err != nil {
@@ -67,6 +79,9 @@ func (h *DeckHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DeckHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	if err := h.repo.Delete(r.Context(), r.PathValue("id")); err != nil {
 		writeServerError(w, r, err)
 		return
@@ -75,6 +90,9 @@ func (h *DeckHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DeckHandler) Share(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req model.ShareDeckRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")

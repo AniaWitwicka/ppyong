@@ -62,6 +62,9 @@ func (h *CollectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CollectionHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req struct {
 		Name  *string `json:"name"`
 		Emoji *string `json:"emoji"`
@@ -80,6 +83,9 @@ func (h *CollectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CollectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	if err := h.repo.Delete(r.Context(), r.PathValue("id")); err != nil {
 		writeServerError(w, r, err)
 		return
@@ -88,6 +94,9 @@ func (h *CollectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CollectionHandler) Share(w http.ResponseWriter, r *http.Request) {
+	if ok, err := h.repo.CanEdit(r.Context(), r.PathValue("id"), userIDFromContext(r)); !allowEdit(w, r, ok, err) {
+		return
+	}
 	var req struct {
 		MemberIDs []string `json:"member_ids"`
 	}

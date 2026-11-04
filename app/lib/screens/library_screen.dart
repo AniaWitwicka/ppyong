@@ -140,6 +140,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               collectionId: collections[i].id,
               collectionName: collections[i].name,
               accentColor: collections[i].color,
+              canEdit: collections[i].canEdit,
             ),
           ),
         ),

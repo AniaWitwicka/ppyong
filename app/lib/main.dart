@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'navigation.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/korean_font.dart';
@@ -22,6 +23,7 @@ class PpyongApp extends StatelessWidget {
     return MaterialApp(
       title: '뿅',
       theme: AppTheme.light,
+      navigatorObservers: [appRouteObserver],
       builder: (context, child) => Container(
         color: const Color(0xFFECE8E1),
         child: SquiggleBackground(

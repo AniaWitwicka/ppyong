@@ -32,6 +32,10 @@ const summaryQuery = `
 		                               AND sp.user_id = $1 THEN ca.id END)::float
 		          / COUNT(DISTINCT ca.id)
 		END                                                         AS progress,
+		COUNT(DISTINCT CASE WHEN sp.interval_days >= 7
+		                    AND sp.user_id = $1 THEN ca.id END)     AS mastered_count,
+		COUNT(DISTINCT CASE WHEN sp.interval_days < 7
+		                    AND sp.user_id = $1 THEN ca.id END)     AS learning_count,
 		(c.created_by = $1 OR EXISTS (SELECT 1 FROM users u
 		  WHERE u.id = $1 AND u.role = 'admin'))                   AS can_edit
 	FROM collections c
@@ -60,7 +64,8 @@ func (r *CollectionRepository) List(ctx context.Context, userID string) ([]model
 	for rows.Next() {
 		var c model.CollectionSummary
 		if err := rows.Scan(&c.ID, &c.Name, &c.Emoji, &c.Color,
-			&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress, &c.CanEdit); err != nil {
+			&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress,
+			&c.MasteredCount, &c.LearningCount, &c.CanEdit); err != nil {
 			return nil, err
 		}
 		collections = append(collections, c)
@@ -77,7 +82,8 @@ func (r *CollectionRepository) GetByID(ctx context.Context, id, userID string) (
 		WHERE c.id = $2
 		GROUP BY c.id, c.title, c.emoji, c.color, c.created_by
 	`, userID, id).Scan(&c.ID, &c.Name, &c.Emoji, &c.Color,
-		&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress, &c.CanEdit)
+		&c.DeckCount, &c.WordCount, &c.DueCount, &c.Progress,
+		&c.MasteredCount, &c.LearningCount, &c.CanEdit)
 	if err != nil {
 		return nil, err
 	}

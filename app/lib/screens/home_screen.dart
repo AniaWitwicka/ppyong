@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/collection.dart';
 import '../models/user.dart';
+import '../navigation.dart';
 import '../services/collection_service.dart';
 import '../services/teacher_service.dart';
 import '../services/user_service.dart';
@@ -22,7 +23,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
   int _navIndex = 0;
   int _homeRefreshKey = 0;
   int _groupsBadge = 0;
@@ -92,6 +93,26 @@ class _HomeScreenState extends State<HomeScreen> {
   // Tab indices shift when teacher mode hides the Learn tab
   int get _groupsIndex => _isTeacherMode ? 2 : 3;
   int get _libraryIndex => _isTeacherMode ? 1 : 2;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    appRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  /// Back on Home from a full screen (study session, deck, collection):
+  /// reload stats, the resume card and collection progress (HRHTA-114).
+  @override
+  void didPopNext() {
+    if (_navIndex == 0 && mounted) setState(() => _homeRefreshKey++);
+  }
 
   void _onTabTap(int i) {
     if (i == 0 && _navIndex != 0) _homeRefreshKey++;
@@ -744,16 +765,9 @@ class _CollectionTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Progress bar
-            ClipRRect(
-              borderRadius: AppRadius.pill,
-              child: LinearProgressIndicator(
-                value: collection.progress,
-                minHeight: 5,
-                backgroundColor: collection.color.withOpacity(0.15),
-                valueColor: AlwaysStoppedAnimation<Color>(collection.color),
-              ),
-            ),
+            // Progress: mastered (green) + learning (collection colour),
+            // the same as each deck's bar on the collection page.
+            CollectionProgressBar(collection: collection),
           ],
         ),
       ),
@@ -826,6 +840,46 @@ class _BottomNav extends StatelessWidget {
         }
         return BottomNavigationBarItem(icon: icon, label: tab.label);
       }).toList(),
+    );
+  }
+}
+
+/// Collection progress on Home: green = mastered, collection colour =
+/// learning (reviewed, not yet mastered), the rest a pale tint = new.
+@visibleForTesting
+class CollectionProgressBar extends StatelessWidget {
+  const CollectionProgressBar({super.key, required this.collection});
+
+  final Collection collection;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = collection;
+    final mastered = c.masteredCount.clamp(0, c.wordCount);
+    final learning = c.learningCount.clamp(0, c.wordCount - mastered);
+    final rest = c.wordCount - mastered - learning;
+    return ClipRRect(
+      borderRadius: AppRadius.pill,
+      child: Container(
+        height: 5,
+        color: c.color.withOpacity(0.15),
+        child: Row(
+          children: [
+            if (mastered > 0)
+              Flexible(
+                flex: mastered,
+                child: Container(
+                    key: const ValueKey('mastered'), color: AppColors.forestGreen),
+              ),
+            if (learning > 0)
+              Flexible(
+                flex: learning,
+                child: Container(key: const ValueKey('learning'), color: c.color),
+              ),
+            if (rest > 0) Flexible(flex: rest, child: const SizedBox.expand()),
+          ],
+        ),
+      ),
     );
   }
 }

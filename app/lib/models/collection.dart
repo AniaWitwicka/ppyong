@@ -11,6 +11,8 @@ class Collection {
     required this.dueCount,
     required this.progress,
     this.canEdit = false,
+    this.masteredCount = 0,
+    this.learningCount = 0,
   });
 
   final String id;
@@ -20,7 +22,13 @@ class Collection {
   final int deckCount;
   final int wordCount;
   final int dueCount;
+  /// Mastered words / all words, 0–1. Needs a 7-day review gap per word,
+  /// so it stays 0 for the first week of studying.
   final double progress;
+
+  /// Words the user has reviewed: mastered, and still learning.
+  final int masteredCount;
+  final int learningCount;
 
   /// The signed-in user created it or is an admin, so they may add, edit and share.
   final bool canEdit;
@@ -35,6 +43,8 @@ class Collection {
         dueCount: j['due_count'] as int,
         progress: (j['progress'] as num).toDouble(),
         canEdit: j['can_edit'] as bool? ?? false,
+        masteredCount: j['mastered_count'] as int? ?? 0,
+        learningCount: j['learning_count'] as int? ?? 0,
       );
 
   static Color _hexToColor(String hex) {

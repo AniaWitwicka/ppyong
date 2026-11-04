@@ -74,7 +74,11 @@ type CollectionSummary struct {
 	DeckCount int     `json:"deck_count"`
 	WordCount int     `json:"word_count"`
 	DueCount  int     `json:"due_count"`
-	Progress  float64 `json:"progress"` // 0.0–1.0
+	Progress  float64 `json:"progress"` // 0.0–1.0, mastered / words
+	// Words the user has reviewed: mastered (interval >= 7 days) and still
+	// learning. Lets the Home bar move as soon as someone studies (HRHTA-114).
+	MasteredCount int `json:"mastered_count"`
+	LearningCount int `json:"learning_count"`
 	// CanEdit: the signed-in user owns it or is an admin, so may change it.
 	CanEdit bool `json:"can_edit"`
 }

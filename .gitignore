@@ -6,6 +6,9 @@ TASKS.md
 .env
 *.env
 
+# Local test database (scripts/local_db.sh) — local only
+backend/scripts/local_db.sh
+
 # Flutter
 app/.dart_tool/
 app/build/

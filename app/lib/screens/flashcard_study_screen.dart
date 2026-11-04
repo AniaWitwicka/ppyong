@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_picker.dart';
 import '../widgets/quiz_question.dart';
+import '../widgets/session_size_pills.dart';
 
 enum _Direction { krToEn, enToKr }
 enum _Scope { all, due, weak }
@@ -99,7 +100,7 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen> {
   Future<List<CardModel>> _loadSelected(String scope) =>
       joinDeckCards(_selection!.ids, (id) => _load(id, scope));
 
-  static const _sessionSizeKey = 'study_session_size';
+  static const _sessionSizeKey = StudyQueue.sizePrefKey;
   static const _testAfterBatchKey = 'study_test_after_batch';
 
   Future<void> _loadPrefs() async {
@@ -432,11 +433,7 @@ class _DirectionPickerScreen extends StatelessWidget {
   /// e.g. "61 cards → 4 sessions of up to 20" or "All 61 cards in one go".
   String _sessionHint() {
     if (scopeCount == 0) return 'No cards to study here yet';
-    if (sessionSize == 0 || sessionSize >= scopeCount) {
-      return 'All $scopeCount card${scopeCount == 1 ? '' : 's'} in one go';
-    }
-    final sessions = (scopeCount / sessionSize).ceil();
-    return '$scopeCount cards → $sessions sessions of up to $sessionSize';
+    return sessionSizeHint(scopeCount, sessionSize);
   }
   final VoidCallback onStart;
   final bool loading;
@@ -535,7 +532,7 @@ class _DirectionPickerScreen extends StatelessWidget {
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
-                    _SessionSizePills(size: sessionSize, onChanged: onSessionSizeChanged),
+                    SessionSizePills(size: sessionSize, onChanged: onSessionSizeChanged),
                     const SizedBox(height: 10),
                     Text(
                       _sessionHint(),
@@ -636,45 +633,6 @@ class _TestToggle extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _SessionSizePills extends StatelessWidget {
-  const _SessionSizePills({required this.size, required this.onChanged});
-  final int size;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final value in StudyQueue.sizes)
-          GestureDetector(
-            onTap: () => onChanged(value),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                color: size == value ? AppColors.periwinkle : Colors.white,
-                borderRadius: AppRadius.pill,
-                border: Border.all(
-                  color: size == value ? AppColors.periwinkle : AppColors.fog.withOpacity(0.5),
-                ),
-              ),
-              child: Text(
-                value == 0 ? 'All' : '$value',
-                style: TextStyle(
-                  color: size == value ? Colors.white : AppColors.ash,
-                  fontSize: 14,
-                  fontWeight: size == value ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

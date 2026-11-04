@@ -79,6 +79,8 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Start'));
+    await tester.pumpAndSettle();
 
     for (final id in ['a1', 'b1', 'b2', 'b3']) {
       expect(find.text('t-$id'), findsOneWidget, reason: 'option t-$id is offered');

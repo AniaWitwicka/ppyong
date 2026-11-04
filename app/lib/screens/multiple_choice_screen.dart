@@ -1,12 +1,15 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/card.dart';
 import '../models/deck_selection.dart';
+import '../models/study_queue.dart';
 import '../services/card_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_picker.dart';
 import '../widgets/quiz_question.dart';
+import '../widgets/session_size_pills.dart';
 
 // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -21,7 +24,30 @@ class _Question {
   final int correctIndex;
 }
 
-enum _Phase { pick, loading, quiz, complete }
+enum _Phase { pick, loading, setup, quiz, complete }
+
+/// One question per card in [batch]; wrong options come from all of [pool].
+List<_Question> _buildQuestions(List<CardModel> batch, List<CardModel> pool, Random rng) {
+  return [
+    for (final card in batch) () {
+      // Skip repeats and words with the same translation (the same word can
+      // sit in two decks).
+      final others = pool.where((c) => c.translation != card.translation).toList()
+        ..shuffle(rng);
+      final wrongAnswers = <String>[];
+      for (final c in others) {
+        if (wrongAnswers.length == 3) break;
+        if (!wrongAnswers.contains(c.translation)) wrongAnswers.add(c.translation);
+      }
+      final options = [card.translation, ...wrongAnswers]..shuffle(rng);
+      return _Question(
+        card: card,
+        options: options,
+        correctIndex: options.indexOf(card.translation),
+      );
+    }(),
+  ];
+}
 
 // ── Root screen ───────────────────────────────────────────────────────────
 
@@ -49,30 +75,58 @@ class MultipleChoiceScreen extends StatefulWidget {
 }
 
 class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
+  final _rng = Random();
   _Phase _phase = _Phase.pick;
   /// The deck(s) being quizzed; null until picked.
   DeckSelection? _selection;
+
+  /// Every card of the chosen decks; also the pool for wrong options.
+  List<CardModel> _cards = [];
+  int _sessionSize = StudyQueue.defaultSize;
+  StudyQueue? _queue;
+
+  /// Questions of the current batch.
   List<_Question> _questions = [];
   int _qi = 0;
   int _correct = 0;
   int _wrong = 0;
 
+  /// Came in with decks already chosen, so Back leaves the screen.
+  bool get _startedWithDecks => widget.selection != null || widget.deckId != null;
+
   @override
   void initState() {
     super.initState();
+    _loadPrefs();
     _selection = widget.selection ??
         (widget.deckId == null
             ? null
             : DeckSelection.single(widget.deckId!, widget.deckName ?? ''));
-    if (_selection != null) _loadAndStart();
+    if (_selection != null) _loadCards();
+  }
+
+  Future<void> _loadPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt(StudyQueue.sizePrefKey);
+      if (!mounted || saved == null || !StudyQueue.sizes.contains(saved)) return;
+      setState(() => _sessionSize = saved);
+    } catch (_) {}
+  }
+
+  void _onSessionSizeChanged(int size) {
+    setState(() => _sessionSize = size);
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setInt(StudyQueue.sizePrefKey, size))
+        .catchError((_) => false);
   }
 
   void _onSelectionDone(DeckSelection selection) {
     setState(() => _selection = selection);
-    _loadAndStart();
+    _loadCards();
   }
 
-  Future<void> _loadAndStart() async {
+  Future<void> _loadCards() async {
     setState(() => _phase = _Phase.loading);
     try {
       final cards = await joinDeckCards(
@@ -87,38 +141,47 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
             subtitle: 'Add at least 2 cards to this deck');
         return;
       }
-      final rng = Random();
-      final shuffled = List<CardModel>.from(cards)..shuffle(rng);
-      final questions = shuffled.map((card) {
-        // Wrong options come from every chosen deck. Skip repeats and words
-        // with the same translation (the same word can sit in two decks).
-        final others = cards.where((c) => c.translation != card.translation).toList()
-          ..shuffle(rng);
-        final wrongAnswers = <String>[];
-        for (final c in others) {
-          if (wrongAnswers.length == 3) break;
-          if (!wrongAnswers.contains(c.translation)) wrongAnswers.add(c.translation);
-        }
-        final options = [card.translation, ...wrongAnswers]..shuffle(rng);
-        return _Question(
-          card: card,
-          options: options,
-          correctIndex: options.indexOf(card.translation),
-        );
-      }).toList();
       setState(() {
-        _questions = questions;
-        _qi = 0;
-        _correct = 0;
-        _wrong = 0;
-        _phase = _Phase.quiz;
+        _cards = cards;
+        _phase = _Phase.setup;
       });
     } catch (_) {
       if (mounted) setState(() => _phase = _Phase.pick);
     }
   }
 
+  /// Orders the words (due first, then new, learning, mastered — shuffled
+  /// inside each group) and starts the first batch.
+  void _start() {
+    final queue = StudyQueue(
+      List<CardModel>.from(_cards)..shuffle(_rng),
+      sessionSize: _sessionSize == 0 ? _cards.length : _sessionSize,
+    );
+    setState(() {
+      _queue = queue;
+      _beginBatch();
+    });
+  }
+
+  /// Next slice of the same queue — no word repeats this sitting.
+  void _nextBatch() {
+    final queue = _queue;
+    if (queue == null || !queue.hasNextSession) return;
+    queue.nextSession();
+    setState(_beginBatch);
+  }
+
+  /// Call inside setState.
+  void _beginBatch() {
+    _questions = _buildQuestions(_queue!.session, _cards, _rng);
+    _qi = 0;
+    _correct = 0;
+    _wrong = 0;
+    _phase = _Phase.quiz;
+  }
+
   void _onAnswer(bool correct) {
+    // Saved per answer, so leaving mid-batch keeps what was answered.
     (widget.reviewCard ?? CardService.instance.reviewCard)(_questions[_qi].card.id, correct)
         .catchError((_) {});
     setState(() {
@@ -134,8 +197,17 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
     }
   }
 
+  void _backFromSetup() {
+    if (_startedWithDecks) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _phase = _Phase.pick);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final queue = _queue;
     return switch (_phase) {
       _Phase.pick => DeckPickerScreen(
           title: 'Multiple choice',
@@ -147,8 +219,16 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
           backgroundColor: AppColors.offWhite,
           body: Center(child: CircularProgressIndicator(color: AppColors.orange)),
         ),
+      _Phase.setup => _SetupScreen(
+          deckName: _selection?.label ?? '',
+          cardCount: _cards.length,
+          sessionSize: _sessionSize,
+          onSessionSizeChanged: _onSessionSizeChanged,
+          onStart: _start,
+          onBack: _backFromSetup,
+        ),
       _Phase.quiz => QuizQuestionView(
-          key: ValueKey(_qi),
+          key: ValueKey('${queue?.sessionNumber}-$_qi'),
           prompt: _questions[_qi].card.korean,
           hint: _questions[_qi].card.romanisation,
           footer: 'Question ${_qi + 1} of ${_questions.length}',
@@ -165,13 +245,123 @@ class _MultipleChoiceScreenState extends State<MultipleChoiceScreen> {
           total: _questions.length,
           correct: _correct,
           wrong: _wrong,
-          onTryAgain: _loadAndStart,
+          batchNumber: queue?.sessionNumber ?? 1,
+          batchCount: queue?.sessionCount ?? 1,
+          wordsLeft: queue?.remainingAfterSession ?? 0,
+          nextBatchSize: queue?.nextSessionSize ?? 0,
+          onNextBatch: _nextBatch,
+          onTryAgain: _start,
           onBack: () => Navigator.pop(context),
         ),
     };
   }
 }
 
+// ── Setup screen ──────────────────────────────────────────────────────────
+
+class _SetupScreen extends StatelessWidget {
+  const _SetupScreen({
+    required this.deckName,
+    required this.cardCount,
+    required this.sessionSize,
+    required this.onSessionSizeChanged,
+    required this.onStart,
+    required this.onBack,
+  });
+
+  final String deckName;
+  final int cardCount;
+  final int sessionSize; // 0 = all
+  final ValueChanged<int> onSessionSizeChanged;
+  final VoidCallback onStart;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: AppColors.offWhite,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, color: AppColors.ink),
+                    tooltip: 'Back',
+                    onPressed: onBack,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Multiple choice',
+                            style: text.displayMedium?.copyWith(fontSize: 22)),
+                        if (deckName.isNotEmpty)
+                          Text(deckName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.bodyMedium?.copyWith(color: AppColors.ash)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Words per session',
+                        style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
+                    SessionSizePills(
+                      size: sessionSize,
+                      onChanged: onSessionSizeChanged,
+                      color: AppColors.orange,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(sessionSizeHint(cardCount, sessionSize),
+                        style: text.bodyMedium?.copyWith(color: AppColors.ash)),
+                    const SizedBox(height: 10),
+                    Text('Every answer counts toward your progress.',
+                        style: text.bodyMedium?.copyWith(color: AppColors.ash)),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+              child: GestureDetector(
+                onTap: onStart,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: AppColors.orange,
+                    borderRadius: AppRadius.pill,
+                  ),
+                  child: const Center(
+                    child: Text('Start',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 // ── Completion screen ─────────────────────────────────────────────────────
 
@@ -181,20 +371,42 @@ class _CompletionScreen extends StatelessWidget {
     required this.total,
     required this.correct,
     required this.wrong,
+    required this.batchNumber,
+    required this.batchCount,
+    required this.wordsLeft,
+    required this.nextBatchSize,
+    required this.onNextBatch,
     required this.onTryAgain,
     required this.onBack,
   });
 
   final String? deckName;
+
+  /// Results of the batch just finished.
   final int total;
   final int correct;
   final int wrong;
+  final int batchNumber;
+  final int batchCount;
+
+  /// Words not yet asked this sitting.
+  final int wordsLeft;
+  final int nextBatchSize;
+  final VoidCallback onNextBatch;
   final VoidCallback onTryAgain;
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
     final score = total == 0 ? 0 : (correct / total * 100).round();
+    final hasNext = wordsLeft > 0;
+    final subtitle = [
+      if (deckName != null && deckName!.isNotEmpty) deckName!,
+      if (batchCount > 1)
+        'Batch $batchNumber of $batchCount'
+      else
+        '$total question${total == 1 ? '' : 's'}',
+    ].join(' · ');
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
@@ -217,16 +429,15 @@ class _CompletionScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              Text('Quiz complete!',
+              Text(hasNext ? 'Batch complete!' : 'Quiz complete!',
                   style: Theme.of(context)
                       .textTheme
                       .displayMedium
                       ?.copyWith(fontSize: 24)),
               const SizedBox(height: 6),
               Text(
-                deckName != null
-                    ? '$deckName · $total question${total == 1 ? '' : 's'}'
-                    : 'You answered $total question${total == 1 ? '' : 's'}',
+                subtitle,
+                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 32),
@@ -261,10 +472,20 @@ class _CompletionScreen extends StatelessWidget {
                   ),
                 ],
               ),
+              if (hasNext) ...[
+                const SizedBox(height: 20),
+                Text(
+                  '$wordsLeft word${wordsLeft == 1 ? '' : 's'} left to go',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AppColors.ash),
+                ),
+              ],
               const Spacer(),
-              // Try again
+              // Next batch / Try again
               GestureDetector(
-                onTap: onTryAgain,
+                onTap: hasNext ? onNextBatch : onTryAgain,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -272,9 +493,12 @@ class _CompletionScreen extends StatelessWidget {
                     color: AppColors.orange,
                     borderRadius: AppRadius.pill,
                   ),
-                  child: const Center(
-                    child: Text('Try again',
-                        style: TextStyle(
+                  child: Center(
+                    child: Text(
+                        hasNext
+                            ? 'Next $nextBatchSize word${nextBatchSize == 1 ? '' : 's'}'
+                            : 'Try again',
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w700)),
@@ -292,9 +516,9 @@ class _CompletionScreen extends StatelessWidget {
                     border: Border.all(color: AppColors.border, width: 1.5),
                     borderRadius: AppRadius.pill,
                   ),
-                  child: const Center(
-                    child: Text('Back to study modes',
-                        style: TextStyle(
+                  child: Center(
+                    child: Text(hasNext ? 'Finish' : 'Back to study modes',
+                        style: const TextStyle(
                             color: AppColors.ash,
                             fontSize: 16,
                             fontWeight: FontWeight.w600)),

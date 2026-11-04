@@ -20,6 +20,9 @@ class StudyQueue {
   static const sizes = [10, 15, 20, 0];
   static const defaultSize = 20;
 
+  /// Saved choice, shared by flashcards and Multiple choice.
+  static const sizePrefKey = 'study_session_size';
+
   int get totalCount => _ordered.length;
 
   /// Cards in the current session.

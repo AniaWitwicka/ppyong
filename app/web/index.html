@@ -31,6 +31,11 @@
 
   <title>ppyong</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Korean font: start downloading now, alongside the app code, so Hangul
+       is ready for the first frame (lib/theme/korean_font.dart). -->
+  <link rel="preload" href="assets/assets/fonts/NotoSansKR-Regular.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/NotoSansKR-Bold.ttf" as="fetch" crossorigin>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

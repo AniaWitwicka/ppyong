@@ -61,6 +61,12 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Korean font (Noto Sans KR, common Hangul only), loaded by
+  # lib/theme/korean_font.dart and preloaded in web/index.html.
+  assets:
+    - assets/fonts/NotoSansKR-Regular.ttf
+    - assets/fonts/NotoSansKR-Bold.ttf
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

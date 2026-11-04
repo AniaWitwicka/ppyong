@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
+import 'theme/korean_font.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'widgets/squiggle_background.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AuthService.instance.init();
+  // Korean font before the first frame, so Hangul never shows as boxes.
+  // Downloads alongside sign-in (preloaded in index.html), max 4 s.
+  await Future.wait([AuthService.instance.init(), loadKoreanFont()]);
   runApp(const PpyongApp());
 }
 

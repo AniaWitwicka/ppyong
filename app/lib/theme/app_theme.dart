@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'korean_font.dart';
+
 class AppColors {
   static const periwinkle = Color(0xFF99B7F5);
   static const forestGreen = Color(0xFF267F53);
@@ -24,6 +26,8 @@ class AppTheme {
         surface: AppColors.offWhite,
       ),
       textTheme: _textTheme,
+      // For theme styles we don't set below; ours carry it via withKorean.
+      fontFamilyFallback: const [koreanFontFamily],
       useMaterial3: true,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
@@ -37,43 +41,55 @@ class AppTheme {
     );
   }
 
+  /// Adds the bundled Korean font after the style's own font, so Hangul never
+  /// waits for Flutter's runtime fallback download (shows boxes meanwhile).
+  /// GoogleFonts styles carry their own fallback list, which would otherwise
+  /// hide the theme-wide one.
+  static TextStyle withKorean(TextStyle style) => style.copyWith(
+        fontFamilyFallback: [
+          ...?style.fontFamilyFallback,
+          if (!(style.fontFamilyFallback?.contains(koreanFontFamily) ?? false))
+            koreanFontFamily,
+        ],
+      );
+
   static TextTheme get _textTheme {
     return TextTheme(
-      displayLarge: GoogleFonts.nunito(
+      displayLarge: withKorean(GoogleFonts.nunito(
         fontSize: 32,
         fontWeight: FontWeight.w800,
         color: AppColors.ink,
-      ),
-      displayMedium: GoogleFonts.nunito(
+      )),
+      displayMedium: withKorean(GoogleFonts.nunito(
         fontSize: 26,
         fontWeight: FontWeight.w700,
         color: AppColors.ink,
-      ),
-      headlineMedium: GoogleFonts.nunito(
+      )),
+      headlineMedium: withKorean(GoogleFonts.nunito(
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: AppColors.ink,
-      ),
-      titleMedium: GoogleFonts.dmSans(
+      )),
+      titleMedium: withKorean(GoogleFonts.dmSans(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: AppColors.ink,
-      ),
-      bodyLarge: GoogleFonts.dmSans(
+      )),
+      bodyLarge: withKorean(GoogleFonts.dmSans(
         fontSize: 16,
         fontWeight: FontWeight.w400,
         color: AppColors.ink,
-      ),
-      bodyMedium: GoogleFonts.dmSans(
+      )),
+      bodyMedium: withKorean(GoogleFonts.dmSans(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: AppColors.ash,
-      ),
-      labelLarge: GoogleFonts.dmSans(
+      )),
+      labelLarge: withKorean(GoogleFonts.dmSans(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: AppColors.ink,
-      ),
+      )),
     );
   }
 }

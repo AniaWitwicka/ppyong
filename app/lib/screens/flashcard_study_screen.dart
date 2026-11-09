@@ -952,13 +952,17 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
     _exitCtrl.forward();
   }
 
+  /// After the flip a card swipes both ways. Before it, only right: a word
+  /// you already know can be skipped as "knew it" without turning it over
+  /// (HRHTA-126). "Again" needs the answer seen first, so left stays shut.
   void _onDragUpdate(DragUpdateDetails d) {
-    if (!_isFlipped || _exiting) return;
-    _drag.value += d.delta.dx;
+    if (_exiting) return;
+    final next = _drag.value + d.delta.dx;
+    _drag.value = _isFlipped ? next : math.max(0.0, next);
   }
 
   void _onDragEnd(DragEndDetails d) {
-    if (!_isFlipped || _exiting) return;
+    if (_exiting) return;
     if (_drag.value > 80) {
       _commitSwipe(true);
     } else if (_drag.value < -80) {
@@ -971,6 +975,7 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final hintOpacity = _isFlipped ? 0.9 : 0.25;
+    const knewItHintOpacity = 0.9; // right swipe works on both sides
 
     return GestureDetector(
       onTap: _flip,
@@ -1004,7 +1009,7 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
                     ),
                   ),
                   AnimatedOpacity(
-                    opacity: hintOpacity,
+                    opacity: knewItHintOpacity,
                     duration: const Duration(milliseconds: 300),
                     child: const Row(
                       children: [

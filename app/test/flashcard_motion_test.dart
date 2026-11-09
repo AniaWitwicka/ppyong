@@ -15,7 +15,8 @@ CardModel card(int i) => CardModel(
       status: CardStatus.newCard,
     );
 
-Future<void> openStudy(WidgetTester tester, {FakeGameFeedback? feedback}) async {
+Future<void> openStudy(WidgetTester tester,
+    {FakeGameFeedback? feedback, List<String>? reviewed}) async {
   SharedPreferences.setMockInitialValues({'study_test_after_batch': false});
   await tester.binding.setSurfaceSize(const Size(400, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -25,7 +26,7 @@ Future<void> openStudy(WidgetTester tester, {FakeGameFeedback? feedback}) async 
       deckId: 'd1',
       deckName: 'Test deck',
       loadCards: (_, scope) async => scope == '' ? cards : <CardModel>[],
-      reviewCard: (_, __) async {},
+      reviewCard: (id, knew) async => reviewed?.add('$id:$knew'),
     ),
   );
   await tester.pumpWidget(feedback?.provide(app) ?? app);
@@ -176,14 +177,70 @@ void main() {
       expect(feedback.calls, ['correct', 'flip', 'again']);
     });
 
-    testWidgets('dragging a card that is not turned yet plays nothing', (tester) async {
-      final feedback = FakeGameFeedback();
-      await openStudy(tester, feedback: feedback);
-      final gesture = await tester.startGesture(tester.getCenter(face('k0')));
-      await gesture.moveBy(const Offset(200, 0));
+    Future<void> dragFront(WidgetTester tester, double dx) async {
+      final gesture = await tester.startGesture(tester.getCenter(face(currentKorean(tester))));
+      for (var i = 0; i < 5; i++) {
+        await gesture.moveBy(Offset(dx / 5, 0));
+      }
       await gesture.up();
       await tester.pumpAndSettle();
+    }
+
+    testWidgets('front side: swipe right skips the word as "knew it" (HRHTA-126)',
+        (tester) async {
+      final feedback = FakeGameFeedback();
+      final reviewed = <String>[];
+      await openStudy(tester, feedback: feedback, reviewed: reviewed);
+      final first = currentKorean(tester);
+
+      final gesture = await tester.startGesture(tester.getCenter(face(first)));
+      for (var i = 0; i < 4; i++) {
+        await gesture.moveBy(const Offset(30, 0));
+      }
+      await tester.pump();
+      expect(find.text('Knew it!'), findsOneWidget, reason: 'green tint while dragging');
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(feedback.calls, ['correct'], reason: 'no swish: the card never turned');
+      expect(reviewed, ['c${first.substring(1)}:true'], reason: 'saved like Knew it');
+      expect(currentKorean(tester), isNot(first));
+      expect(find.text('Tap to reveal'), findsWidgets, reason: 'next card, front up');
+    });
+
+    testWidgets('front side: left and short drags do nothing', (tester) async {
+      final feedback = FakeGameFeedback();
+      final reviewed = <String>[];
+      await openStudy(tester, feedback: feedback, reviewed: reviewed);
+      final first = currentKorean(tester);
+      final settled = tester.getRect(face(first));
+
+      final gesture = await tester.startGesture(tester.getCenter(face(first)));
+      await gesture.moveBy(const Offset(-60, 0));
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump();
+      expect(find.text('Keep trying'), findsNothing, reason: 'left is shut before the flip');
+      expect(tester.getRect(face(first)), settled, reason: 'the card does not move left');
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      await dragFront(tester, -200);
+      await dragFront(tester, 50); // short: snaps back
       expect(feedback.calls, isEmpty);
+      expect(reviewed, isEmpty);
+      expect(currentKorean(tester), first);
+      expect(tester.getRect(face(first)), settled);
+    });
+
+    testWidgets('a front skip counts in the Knew it score', (tester) async {
+      final feedback = FakeGameFeedback();
+      await openStudy(tester, feedback: feedback);
+      await dragFront(tester, 200);
+      await flip(tester);
+      await tester.tap(find.text('Knew it').last);
+      await tester.pumpAndSettle();
+      await dragFront(tester, 200);
+      expect(feedback.calls, ['correct', 'flip', 'correct', 'correct', 'sessionComplete']);
     });
   });
 }

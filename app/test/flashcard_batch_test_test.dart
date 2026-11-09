@@ -260,4 +260,29 @@ void main() {
     expect(find.text('k0'), findsOneWidget);
     expect(find.text('k1'), findsOneWidget);
   });
+
+  testWidgets('a word skipped from the front side is still in the batch test (HRHTA-126)',
+      (tester) async {
+    await open(tester, 4);
+    final skipped = currentKorean(tester);
+    final gesture = await tester.startGesture(tester.getCenter(find.text(skipped)));
+    for (var i = 0; i < 5; i++) {
+      await gesture.moveBy(const Offset(40, 0));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(currentKorean(tester), isNot(skipped));
+    for (var i = 1; i < 4; i++) {
+      await swipe(tester, knew: true);
+    }
+    expect(reviewed, isEmpty, reason: 'with the test on, only the test counts');
+
+    final asked = <String>{};
+    for (var i = 0; i < 4; i++) {
+      asked.add(currentKorean(tester));
+      await answer(tester, right: true);
+    }
+    expect(asked, contains(skipped));
+    expect(reviewed.map((r) => r.$1), contains('c${skipped.substring(1)}'));
+  });
 }

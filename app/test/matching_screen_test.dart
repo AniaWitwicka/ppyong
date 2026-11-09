@@ -5,6 +5,8 @@ import 'package:ppyong/models/match_game.dart';
 import 'package:ppyong/screens/matching_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_game_feedback.dart';
+
 CardModel card(int i) => CardModel(
       id: 'c$i',
       korean: 'k$i',
@@ -22,11 +24,11 @@ class _Harness {
   /// Opens MatchingScreen (pushed from a home page, so "Leave" can pop it)
   /// on the setup screen for a deck with [cards].
   Future<void> open(WidgetTester tester, List<CardModel> cards,
-      {Map<String, Object> prefs = const {}}) async {
+      {Map<String, Object> prefs = const {}, FakeGameFeedback? feedback}) async {
     SharedPreferences.setMockInitialValues(prefs);
     await tester.binding.setSurfaceSize(const Size(400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(
+    final app = MaterialApp(
       home: Builder(
         builder: (context) => Scaffold(
           body: Center(
@@ -47,7 +49,8 @@ class _Harness {
           ),
         ),
       ),
-    ));
+    );
+    await tester.pumpWidget(feedback?.provide(app) ?? app);
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
@@ -155,6 +158,21 @@ void main() {
     expect(find.text('Deck cleared!'), findsOneWidget);
     expect(find.textContaining('All 3 words matched'), findsOneWidget);
     expect(h.recorded.single.deckFinished, isTrue);
+    await h.close(tester);
+  });
+
+  testWidgets('the end screen celebrates once, whether cleared or out of time', (tester) async {
+    final h = _Harness();
+    final feedback = FakeGameFeedback();
+    await h.open(tester, deck(8), feedback: feedback);
+    await h.start(tester, seconds: 30);
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text("Time's up!"), findsOneWidget);
+    expect(feedback.calls.where((c) => c.endsWith('Complete')), ['sessionComplete']);
+    await tester.pump(const Duration(seconds: 2));
+    expect(feedback.calls.where((c) => c.endsWith('Complete')), ['sessionComplete']);
     await h.close(tester);
   });
 

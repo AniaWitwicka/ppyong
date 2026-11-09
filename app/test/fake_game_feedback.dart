@@ -16,6 +16,8 @@ class FakeGameFeedback extends GameFeedback {
   void tap() => calls.add('tap');
   @override
   void sessionComplete() => calls.add('sessionComplete');
+  @override
+  void batchComplete() => calls.add('batchComplete');
 
   /// [child] with this fake as the app's [GameFeedback].
   Widget provide(Widget child) =>

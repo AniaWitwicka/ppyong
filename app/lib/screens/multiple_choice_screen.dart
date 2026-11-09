@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_picker.dart';
 import '../widgets/quiz_question.dart';
+import '../widgets/session_celebration.dart';
 import '../widgets/session_size_pills.dart';
 
 // ── Data ──────────────────────────────────────────────────────────────────
@@ -411,123 +412,128 @@ class _CompletionScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              // Trophy squircle
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  color: AppColors.sunnyYellow,
-                  borderRadius: BorderRadius.all(Radius.circular(24)),
-                ),
-                child: const Center(
-                  child: Text('🎉', style: TextStyle(fontSize: 36)),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(hasNext ? 'Batch complete!' : 'Quiz complete!',
-                  style: Theme.of(context)
-                      .textTheme
-                      .displayMedium
-                      ?.copyWith(fontSize: 24)),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 32),
-              // Stat cards
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      value: '$correct',
-                      label: 'CORRECT',
-                      bg: const Color(0xFFE8F5EE),
-                      valueColor: const Color(0xFF267F53),
-                    ),
+      body: SessionCelebration(
+        big: !hasNext,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Spacer(),
+                // Trophy squircle
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    color: AppColors.sunnyYellow,
+                    borderRadius: BorderRadius.all(Radius.circular(24)),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatCard(
-                      value: '$wrong',
-                      label: 'WRONG',
-                      bg: const Color(0xFFFEF0F6),
-                      valueColor: const Color(0xFFC45A8A),
-                    ),
+                  child: const Center(
+                    child: Text('🎉', style: TextStyle(fontSize: 36)),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatCard(
-                      value: '$score%',
-                      label: 'SCORE',
-                      bg: const Color(0xFFFEF9E8),
-                      valueColor: const Color(0xFF7A5500),
+                ),
+                const SizedBox(height: 20),
+                Text(hasNext ? 'Batch complete!' : 'Quiz complete!',
+                    style: Theme.of(context)
+                        .textTheme
+                        .displayMedium
+                        ?.copyWith(fontSize: 24)),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 10),
+                _PraiseLine(total: total, perfect: total > 0 && wrong == 0),
+                const SizedBox(height: 24),
+                // Stat cards
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        value: '$correct',
+                        label: 'CORRECT',
+                        bg: const Color(0xFFE8F5EE),
+                        valueColor: const Color(0xFF267F53),
+                      ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StatCard(
+                        value: '$wrong',
+                        label: 'WRONG',
+                        bg: const Color(0xFFFEF0F6),
+                        valueColor: const Color(0xFFC45A8A),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StatCard(
+                        value: '$score%',
+                        label: 'SCORE',
+                        bg: const Color(0xFFFEF9E8),
+                        valueColor: const Color(0xFF7A5500),
+                      ),
+                    ),
+                  ],
+                ),
+                if (hasNext) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    '$wordsLeft word${wordsLeft == 1 ? '' : 's'} left to go',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppColors.ash),
                   ),
                 ],
-              ),
-              if (hasNext) ...[
-                const SizedBox(height: 20),
-                Text(
-                  '$wordsLeft word${wordsLeft == 1 ? '' : 's'} left to go',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: AppColors.ash),
+                const Spacer(),
+                // Next batch / Try again
+                GestureDetector(
+                  onTap: hasNext ? onNextBatch : onTryAgain,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: const BoxDecoration(
+                      color: AppColors.orange,
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Center(
+                      child: Text(
+                          hasNext
+                              ? 'Next $nextBatchSize word${nextBatchSize == 1 ? '' : 's'}'
+                              : 'Try again',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
                 ),
+                const SizedBox(height: 12),
+                // Back ghost button
+                GestureDetector(
+                  onTap: onBack,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border, width: 1.5),
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Center(
+                      child: Text(hasNext ? 'Finish' : 'Back to study modes',
+                          style: const TextStyle(
+                              color: AppColors.ash,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
               ],
-              const Spacer(),
-              // Next batch / Try again
-              GestureDetector(
-                onTap: hasNext ? onNextBatch : onTryAgain,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: const BoxDecoration(
-                    color: AppColors.orange,
-                    borderRadius: AppRadius.pill,
-                  ),
-                  child: Center(
-                    child: Text(
-                        hasNext
-                            ? 'Next $nextBatchSize word${nextBatchSize == 1 ? '' : 's'}'
-                            : 'Try again',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Back ghost button
-              GestureDetector(
-                onTap: onBack,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border, width: 1.5),
-                    borderRadius: AppRadius.pill,
-                  ),
-                  child: Center(
-                    child: Text(hasNext ? 'Finish' : 'Back to study modes',
-                        style: const TextStyle(
-                            color: AppColors.ash,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
         ),
       ),
@@ -572,6 +578,27 @@ class _StatCard extends StatelessWidget {
                   letterSpacing: 0.5)),
         ],
       ),
+    );
+  }
+}
+
+/// "10 words practised", plus "Perfect round!" when nothing was missed.
+/// Praises finishing; the score stays in the stat cards.
+class _PraiseLine extends StatelessWidget {
+  const _PraiseLine({required this.total, required this.perfect});
+
+  final int total;
+  final bool perfect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '$total word${total == 1 ? '' : 's'} practised${perfect ? ' · Perfect round!' : ''}',
+      textAlign: TextAlign.center,
+      style: Theme.of(context)
+          .textTheme
+          .bodyMedium
+          ?.copyWith(color: AppColors.ink, fontWeight: FontWeight.w600),
     );
   }
 }

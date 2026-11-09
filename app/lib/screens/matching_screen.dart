@@ -8,6 +8,7 @@ import '../services/card_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_picker.dart';
+import '../widgets/session_celebration.dart';
 
 const _bubblegumTint = Color(0xFFFEF0F6);
 const _pinkDark = Color(0xFFC45A8A);
@@ -805,91 +806,95 @@ class _CompletionScreen extends StatelessWidget {
         ? 'All ${r.matched} words matched with ${r.secondsLeft}s to spare'
         : '${deckName ?? 'Matching'} · best ${r.best}';
 
+    // A round ends either way (board cleared or time's up) — both celebrate.
     return Scaffold(
       backgroundColor: AppColors.offWhite,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  color: AppColors.sunnyYellow,
-                  borderRadius: BorderRadius.all(Radius.circular(24)),
-                ),
-                child: Center(
-                  child: Text(r.perfectRun ? '🎉' : '⏱️', style: const TextStyle(fontSize: 36)),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(title,
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(fontSize: 24)),
-              const SizedBox(height: 6),
-              Text(subtitle,
-                  textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
-              if (r.isNewBest) ...[
-                const SizedBox(height: 12),
+      body: SessionCelebration(
+        big: true,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: const BoxDecoration(color: _bubblegumTint, borderRadius: AppRadius.pill),
-                  child: const Text('New best!',
-                      style: TextStyle(color: _pinkDark, fontSize: 13, fontWeight: FontWeight.w800)),
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    color: AppColors.sunnyYellow,
+                    borderRadius: BorderRadius.all(Radius.circular(24)),
+                  ),
+                  child: Center(
+                    child: Text(r.perfectRun ? '🎉' : '⏱️', style: const TextStyle(fontSize: 36)),
+                  ),
                 ),
-              ],
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                        value: '${r.matched}', label: 'MATCHED', bg: _greenTint, valueColor: AppColors.forestGreen),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatCard(
-                        value: '${r.mistakes}', label: 'MISTAKES', bg: _bubblegumTint, valueColor: _pinkDark),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatCard(
-                      value: '${(r.accuracy * 100).round()}%',
-                      label: 'ACCURACY',
-                      bg: const Color(0xFFFEF9E8),
-                      valueColor: const Color(0xFF7A5500),
-                    ),
+                const SizedBox(height: 20),
+                Text(title,
+                    style: Theme.of(context).textTheme.displayMedium?.copyWith(fontSize: 24)),
+                const SizedBox(height: 6),
+                Text(subtitle,
+                    textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+                if (r.isNewBest) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: const BoxDecoration(color: _bubblegumTint, borderRadius: AppRadius.pill),
+                    child: const Text('New best!',
+                        style: TextStyle(color: _pinkDark, fontSize: 13, fontWeight: FontWeight.w800)),
                   ),
                 ],
-              ),
-              if (r.toReview > 0) ...[
-                const SizedBox(height: 16),
-                Text(
-                  '${r.toReview} tricky word${r.toReview == 1 ? '' : 's'} will come back sooner in Flashcards',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                const SizedBox(height: 32),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                          value: '${r.matched}', label: 'MATCHED', bg: _greenTint, valueColor: AppColors.forestGreen),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StatCard(
+                          value: '${r.mistakes}', label: 'MISTAKES', bg: _bubblegumTint, valueColor: _pinkDark),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StatCard(
+                        value: '${(r.accuracy * 100).round()}%',
+                        label: 'ACCURACY',
+                        bg: const Color(0xFFFEF9E8),
+                        valueColor: const Color(0xFF7A5500),
+                      ),
+                    ),
+                  ],
                 ),
+                if (r.toReview > 0) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    '${r.toReview} tricky word${r.toReview == 1 ? '' : 's'} will come back sooner in Flashcards',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+                const Spacer(),
+                _PillButton(label: 'Play again', color: AppColors.orange, onTap: onPlayAgain),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: onBack,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border, width: 1.5),
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: const Center(
+                      child: Text('Back to study modes',
+                          style: TextStyle(color: AppColors.ash, fontSize: 16, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
               ],
-              const Spacer(),
-              _PillButton(label: 'Play again', color: AppColors.orange, onTap: onPlayAgain),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: onBack,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border, width: 1.5),
-                    borderRadius: AppRadius.pill,
-                  ),
-                  child: const Center(
-                    child: Text('Back to study modes',
-                        style: TextStyle(color: AppColors.ash, fontSize: 16, fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
         ),
       ),

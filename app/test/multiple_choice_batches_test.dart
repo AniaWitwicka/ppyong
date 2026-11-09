@@ -57,6 +57,18 @@ Future<void> answerRight(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Picks a wrong option, then Next.
+Future<void> answerWrong(WidgetTester tester) async {
+  final word = currentWord(tester);
+  await tester.tap(find
+      .byWidgetPredicate((w) => w is Text && (w.data ?? '').startsWith('t-') && w.data != 't-$word')
+      .first);
+  await tester.pump(const Duration(milliseconds: 500));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Next →'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('answers give feedback once: right → correct, wrong → wrong, Next is silent',
       (tester) async {
@@ -122,6 +134,31 @@ void main() {
     expect(find.text('Try again'), findsOneWidget);
     expect(reviewed.toSet(), {for (final c in _cards) c.id});
     expect(reviewed.length, 12);
+  });
+
+  testWidgets('a mid-quiz batch gets the small celebration, the last one the full one',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'study_session_size': 10});
+    final feedback = FakeGameFeedback();
+    await openQuiz(tester, feedback: feedback);
+    await tester.tap(find.text('Start'));
+    await tester.pumpAndSettle();
+
+    await answerWrong(tester); // same celebration at any score
+    for (var i = 1; i < 10; i++) {
+      await answerRight(tester);
+    }
+    expect(find.text('10 words practised'), findsOneWidget);
+    expect(feedback.calls.where((c) => c.endsWith('Complete')), ['batchComplete']);
+
+    await tester.tap(find.text('Next 2 words'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 2; i++) {
+      await answerRight(tester);
+    }
+    expect(find.text('2 words practised · Perfect round!'), findsOneWidget);
+    expect(feedback.calls.where((c) => c.endsWith('Complete')),
+        ['batchComplete', 'sessionComplete']);
   });
 
   testWidgets('the batch size picked is remembered for next time', (tester) async {

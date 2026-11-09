@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_picker.dart';
 import '../widgets/quiz_question.dart';
+import '../widgets/session_celebration.dart';
 import '../widgets/session_size_pills.dart';
 
 enum _Direction { krToEn, enToKr }
@@ -1418,9 +1419,7 @@ class _SessionComplete extends StatelessWidget {
       if (sessionCount > 1) 'Session $sessionNumber of $sessionCount',
     ].join(' · ');
 
-    return Scaffold(
-      backgroundColor: AppColors.offWhite,
-      body: SafeArea(
+    final content = SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -1452,7 +1451,19 @@ class _SessionComplete extends StatelessWidget {
                       ?.copyWith(color: AppColors.ash),
                 ),
               ],
-              const SizedBox(height: 36),
+              if (total > 0) ...[
+                const SizedBox(height: 10),
+                Text(
+                  '$total word${total == 1 ? '' : 's'} practised'
+                  '${tested && missed == 0 ? ' · Perfect round!' : ''}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AppColors.ink, fontWeight: FontWeight.w600),
+                ),
+              ],
+              const SizedBox(height: 30),
               Row(
                 children: [
                   Expanded(
@@ -1547,7 +1558,12 @@ class _SessionComplete extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      );
+
+    return Scaffold(
+      backgroundColor: AppColors.offWhite,
+      // An empty batch (nothing in scope) has nothing to celebrate.
+      body: total > 0 ? SessionCelebration(big: !hasNext, child: content) : content,
     );
   }
 }

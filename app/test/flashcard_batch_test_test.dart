@@ -201,7 +201,9 @@ void main() {
   });
 
   testWidgets('batches of 10: test each batch, then the next batch', (tester) async {
-    await open(tester, 12);
+    final feedback = FakeGameFeedback();
+    List<String> wins() => feedback.calls.where((c) => c.endsWith('Complete')).toList();
+    await open(tester, 12, feedback: feedback);
     for (var i = 0; i < 10; i++) {
       await swipe(tester, knew: true);
     }
@@ -210,7 +212,9 @@ void main() {
       await answer(tester, right: true);
     }
     expect(find.text('All 10 remembered!'), findsOneWidget);
+    expect(find.text('10 words practised · Perfect round!'), findsOneWidget);
     expect(find.text('2 words left to go'), findsOneWidget);
+    expect(wins(), ['batchComplete']);
 
     await tester.tap(find.text('Next 2 words'));
     await tester.pumpAndSettle();
@@ -220,6 +224,7 @@ void main() {
     await answer(tester, right: true);
     await answer(tester, right: true);
     expect(find.text('All sessions done!'), findsOneWidget);
+    expect(wins(), ['batchComplete', 'sessionComplete']);
     expect(reviewed.map((r) => r.$1).toSet(), hasLength(12));
   });
 

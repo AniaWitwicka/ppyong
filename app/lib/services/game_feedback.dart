@@ -171,6 +171,12 @@ class GameFeedback extends ChangeNotifier {
     _haptic(HapticFeedback.heavyImpact);
   }
 
+  /// A batch done with more still to come: a smaller win than [sessionComplete].
+  void batchComplete() {
+    _play(FeedbackSound.correct);
+    _haptic(HapticFeedback.mediumImpact);
+  }
+
   void _play(FeedbackSound sound) {
     if (!_sound) return;
     _player.play(sound, volumes[sound]!).catchError((_) {});

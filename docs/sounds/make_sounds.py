@@ -85,11 +85,15 @@ SOUNDS = {
         'tap': (0.05, [bloop(0, 1400, 1800, 0.045, 1.0)]),
         'complete': (1.20, [bloop(0, 450, 700, 0.16, 0.8), bloop(0.13, 560, 880, 0.16, 0.8),
                             bloop(0.26, 700, 1050, 0.16, 0.85), bloop(0.40, 880, 1400, 0.75, 1.0)]),
+        # A batch done with more to come (HRHTA-109): the first three notes of
+        # 'complete', last one held a little — a finish, but smaller.
+        'batch': (0.58, [bloop(0, 450, 700, 0.14, 0.8), bloop(0.11, 560, 880, 0.14, 0.85),
+                         bloop(0.22, 700, 1050, 0.34, 1.0)]),
     },
 }
 
 # Peak level per sound (dBFS): wrong a bit quieter than correct, tap quiet.
-PEAK_DB = {'correct': -3.0, 'wrong': -5.0, 'tap': -10.0, 'complete': -3.0}
+PEAK_DB = {'correct': -3.0, 'wrong': -5.0, 'tap': -10.0, 'complete': -3.0, 'batch': -3.0}
 
 
 def write(path, samples, peak_db):

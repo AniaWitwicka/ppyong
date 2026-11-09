@@ -67,6 +67,18 @@ void main() {
     expect(feedback.vibrationOn, isTrue);
   });
 
+  test('a finished batch has its own jingle, not the right-answer pop', () async {
+    final (feedback, player) = await make();
+    feedback.correct();
+    feedback.batchComplete();
+    feedback.sessionComplete();
+    await Future<void>.delayed(Duration.zero);
+    expect(player.played,
+        [FeedbackSound.correct, FeedbackSound.batch, FeedbackSound.complete]);
+    expect(haptics.last, 'HapticFeedbackType.heavyImpact');
+    expect(haptics[1], 'HapticFeedbackType.mediumImpact');
+  });
+
   test('each call plays its sound and its vibration', () async {
     final (feedback, player) = await make();
     feedback.correct();

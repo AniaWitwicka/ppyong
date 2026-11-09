@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// The four sounds of the games. The same sound always means the same thing
 /// in every game (HRHTA-103 standards).
-enum FeedbackSound { correct, wrong, tap, complete }
+enum FeedbackSound { correct, wrong, tap, complete, batch }
 
 /// Plays the feedback sounds. Swapped for a fake in tests.
 abstract class SoundPlayer {
@@ -88,6 +88,7 @@ class GameFeedback extends ChangeNotifier {
     FeedbackSound.wrong: 0.55,
     FeedbackSound.tap: 0.35,
     FeedbackSound.complete: 0.7,
+    FeedbackSound.batch: 0.65,
   };
 
   /// Gap between the two short buzzes of [wrong].
@@ -173,7 +174,7 @@ class GameFeedback extends ChangeNotifier {
 
   /// A batch done with more still to come: a smaller win than [sessionComplete].
   void batchComplete() {
-    _play(FeedbackSound.correct);
+    _play(FeedbackSound.batch);
     _haptic(HapticFeedback.mediumImpact);
   }
 

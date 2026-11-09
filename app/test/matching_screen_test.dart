@@ -176,6 +176,70 @@ void main() {
     await h.close(tester);
   });
 
+  group('feedback (HRHTA-108)', () {
+    testWidgets('first tile taps, a pair dings, a mismatch knocks; unselecting is quiet',
+        (tester) async {
+      final h = _Harness();
+      final feedback = FakeGameFeedback();
+      await h.open(tester, deck(3), feedback: feedback);
+      await h.start(tester);
+      expect(feedback.calls, isEmpty, reason: 'nothing plays on deal');
+
+      await tester.tap(find.text('k0'));
+      await tester.pump();
+      expect(feedback.calls, ['tap']);
+      await tester.tap(find.text('k0')); // unselect
+      await tester.pump();
+      expect(feedback.calls, ['tap']);
+
+      await h.tapPair(tester, 'k0', 't1');
+      expect(feedback.calls, ['tap', 'tap', 'wrong']);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await h.tapPair(tester, 'k0', 't0');
+      expect(feedback.calls, ['tap', 'tap', 'wrong', 'tap', 'correct']);
+      await h.close(tester);
+    });
+
+    testWidgets('clearing the deck: no ding on the last pair, the end screen celebrates once',
+        (tester) async {
+      final h = _Harness();
+      final feedback = FakeGameFeedback();
+      await h.open(tester, deck(6), feedback: feedback);
+      await h.start(tester, pairs: 4);
+
+      for (var board = 0; board < 2; board++) {
+        final onBoard = [for (var i = 0; i < 6; i++) if (find.text('k$i').evaluate().isNotEmpty) i];
+        for (final i in onBoard) {
+          await h.tapPair(tester, 'k$i', 't$i');
+        }
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Deck cleared!'), findsOneWidget);
+      expect(feedback.calls.where((c) => c != 'tap'),
+          ['correct', 'correct', 'correct', 'correct', 'correct', 'sessionComplete'],
+          reason: 'a cleared board with more to come is just its last ding');
+      await tester.pump(const Duration(seconds: 2));
+      expect(feedback.calls.where((c) => c == 'sessionComplete'), hasLength(1));
+      await h.close(tester);
+    });
+
+    testWidgets('the timer keeps running through the sounds', (tester) async {
+      final h = _Harness();
+      final feedback = FakeGameFeedback();
+      await h.open(tester, deck(3), feedback: feedback);
+      await h.start(tester, seconds: 30);
+      await h.tapPair(tester, 'k0', 't1');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.text('28s'), findsOneWidget);
+      await h.close(tester);
+    });
+  });
+
   testWidgets('next board is dealt after the first one is cleared', (tester) async {
     final h = _Harness();
     await h.open(tester, deck(6));

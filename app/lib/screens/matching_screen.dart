@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/card.dart';
 import '../models/match_game.dart';
 import '../services/card_service.dart';
+import '../services/game_feedback.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_picker.dart';
@@ -452,17 +453,25 @@ class _BoardScreenState extends State<_BoardScreen>
   void _onTileTap(MatchTile tile) {
     if (_over || _dealing) return;
     final outcome = _game.select(tile);
+    // Feedback is fire-and-forget: the game and its timer never wait for it.
+    final feedback = GameFeedback.of(context);
     switch (outcome) {
       case MatchOutcome.correct:
+        // The last pair of the deck goes straight to the end screen, whose
+        // "complete" jingle takes over instead of a ding underneath it.
+        if (!_game.deckFinished) feedback.correct();
         setState(() => _poppingTiles = _game.lastPair.toSet());
         _popCtrl.forward(from: 0);
         if (_game.boardCleared) _afterBoardCleared();
       case MatchOutcome.wrong:
+        feedback.wrong();
         setState(() => _wrongTiles = _game.lastPair.toSet());
         _shakeCtrl.forward(from: 0).whenComplete(() {
           if (mounted) setState(() => _wrongTiles = {});
         });
       case MatchOutcome.selected:
+        feedback.tap();
+        setState(() {});
       case MatchOutcome.deselected:
         setState(() {});
       case MatchOutcome.ignored:

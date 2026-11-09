@@ -6,6 +6,7 @@ import '../models/card.dart';
 import '../models/deck_selection.dart';
 import '../models/study_queue.dart';
 import '../services/card_service.dart';
+import '../services/game_feedback.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/deck_picker.dart';
@@ -932,12 +933,17 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
 
   void _flip() {
     if (_isFlipped || _exiting) return;
+    GameFeedback.of(context).tap();
     _flipCtrl.forward();
     setState(() => _isFlipped = true);
   }
 
+  /// A finished swipe or an answer button. Feedback plays here only, so a
+  /// drag that's let go before the line stays silent.
   void _commitSwipe(bool knewIt) {
     if (_exiting) return;
+    final feedback = GameFeedback.of(context);
+    knewIt ? feedback.correct() : feedback.again();
     setState(() {
       _exiting = true;
       _exitKnewIt = knewIt;

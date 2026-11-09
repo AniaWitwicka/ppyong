@@ -91,6 +91,10 @@ class GameFeedback extends ChangeNotifier {
     FeedbackSound.batch: 0.65,
   };
 
+  /// "Again" in Flashcards: the wrong tone, but much quieter — an honest
+  /// self-rating, not a mistake.
+  static const againVolume = 0.25;
+
   /// Gap between the two short buzzes of [wrong].
   static const wrongBuzzGap = Duration(milliseconds: 80);
 
@@ -163,6 +167,14 @@ class GameFeedback extends ChangeNotifier {
     Timer(wrongBuzzGap, () => _haptic(HapticFeedback.mediumImpact));
   }
 
+  /// "Again" / "didn't know" in Flashcards: the wrong tone, quiet, and one
+  /// light tap. Softer than [wrong] so rating yourself honestly never feels
+  /// like a punishment.
+  void again() {
+    _play(FeedbackSound.wrong, volume: againVolume);
+    _haptic(HapticFeedback.lightImpact);
+  }
+
   /// Light touch (flip a card, pick a tile): quiet click, no vibration.
   void tap() => _play(FeedbackSound.tap);
 
@@ -178,9 +190,9 @@ class GameFeedback extends ChangeNotifier {
     _haptic(HapticFeedback.mediumImpact);
   }
 
-  void _play(FeedbackSound sound) {
+  void _play(FeedbackSound sound, {double? volume}) {
     if (!_sound) return;
-    _player.play(sound, volumes[sound]!).catchError((_) {});
+    _player.play(sound, volume ?? volumes[sound]!).catchError((_) {});
   }
 
   void _haptic(Future<void> Function() buzz) {

@@ -13,6 +13,8 @@ class FakeGameFeedback extends GameFeedback {
   @override
   void wrong() => calls.add('wrong');
   @override
+  void again() => calls.add('again');
+  @override
   void tap() => calls.add('tap');
   @override
   void sessionComplete() => calls.add('sessionComplete');

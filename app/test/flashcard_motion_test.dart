@@ -4,6 +4,8 @@ import 'package:ppyong/models/card.dart';
 import 'package:ppyong/screens/flashcard_study_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_game_feedback.dart';
+
 CardModel card(int i) => CardModel(
       id: 'c$i',
       korean: 'k$i',
@@ -13,19 +15,20 @@ CardModel card(int i) => CardModel(
       status: CardStatus.newCard,
     );
 
-Future<void> openStudy(WidgetTester tester) async {
+Future<void> openStudy(WidgetTester tester, {FakeGameFeedback? feedback}) async {
   SharedPreferences.setMockInitialValues({'study_test_after_batch': false});
   await tester.binding.setSurfaceSize(const Size(400, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final cards = [for (var i = 0; i < 3; i++) card(i)];
-  await tester.pumpWidget(MaterialApp(
+  final app = MaterialApp(
     home: FlashcardStudyScreen(
       deckId: 'd1',
       deckName: 'Test deck',
       loadCards: (_, scope) async => scope == '' ? cards : <CardModel>[],
       reviewCard: (_, __) async {},
     ),
-  ));
+  );
+  await tester.pumpWidget(feedback?.provide(app) ?? app);
   await tester.pumpAndSettle();
   await tester.tap(find.text('Start studying'));
   await tester.pumpAndSettle();
@@ -109,5 +112,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Keep trying'), findsNothing);
     expect(find.text('t0'), findsOneWidget);
+  });
+
+  group('feedback', () {
+    Future<void> flip(WidgetTester tester) async {
+      await tester.tap(find.text('Tap to reveal').first);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> swipe(WidgetTester tester, double dx) async {
+      final gesture = await tester.startGesture(tester.getCenter(face(
+          tester.widgetList<Text>(find.byType(Text)).map((t) => t.data ?? '')
+              .firstWhere((s) => RegExp(r'^t\d$').hasMatch(s)))));
+      for (var i = 0; i < 5; i++) {
+        await gesture.moveBy(Offset(dx / 5, 0));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('flip → quiet tap; buttons: Knew it → correct, Again → soft',
+        (tester) async {
+      final feedback = FakeGameFeedback();
+      await openStudy(tester, feedback: feedback);
+      expect(feedback.calls, isEmpty, reason: 'nothing plays on open');
+
+      await flip(tester);
+      expect(feedback.calls, ['tap']);
+      await tester.tap(face('t0'));
+      await tester.pumpAndSettle();
+      expect(feedback.calls, ['tap'], reason: 'tapping a turned card is silent');
+
+      await tester.tap(find.text('Knew it').last);
+      await tester.pump();
+      expect(feedback.calls, ['tap', 'correct'], reason: 'plays the moment it is rated');
+      await tester.pumpAndSettle();
+
+      await flip(tester);
+      await tester.tap(find.text('Again'));
+      await tester.pump();
+      await tester.tap(find.text('Again'), warnIfMissed: false); // double tap
+      await tester.pumpAndSettle();
+      expect(feedback.calls, ['tap', 'correct', 'tap', 'again']);
+    });
+
+    testWidgets('swipes: right → correct, left → soft again, let go early → nothing',
+        (tester) async {
+      final feedback = FakeGameFeedback();
+      await openStudy(tester, feedback: feedback);
+      await flip(tester);
+      feedback.calls.clear();
+
+      await swipe(tester, 50); // short drag: the card goes back
+      expect(feedback.calls, isEmpty);
+      await swipe(tester, -50);
+      expect(feedback.calls, isEmpty);
+
+      await swipe(tester, 200);
+      expect(feedback.calls, ['correct']);
+
+      await flip(tester);
+      await swipe(tester, -200);
+      expect(feedback.calls, ['correct', 'tap', 'again']);
+    });
+
+    testWidgets('dragging a card that is not turned yet plays nothing', (tester) async {
+      final feedback = FakeGameFeedback();
+      await openStudy(tester, feedback: feedback);
+      final gesture = await tester.startGesture(tester.getCenter(face('k0')));
+      await gesture.moveBy(const Offset(200, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(feedback.calls, isEmpty);
+    });
   });
 }

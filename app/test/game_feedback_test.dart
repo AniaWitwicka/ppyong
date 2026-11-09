@@ -14,12 +14,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeSoundPlayer implements SoundPlayer {
   final played = <FeedbackSound>[];
+  final volumes = <double>[];
   int preloads = 0;
   @override
   Future<void> preload() async => preloads++;
   @override
-  Future<void> play(FeedbackSound sound, double volume) async =>
-      played.add(sound);
+  Future<void> play(FeedbackSound sound, double volume) async {
+    played.add(sound);
+    volumes.add(volume);
+  }
 }
 
 class ThrowingSoundPlayer implements SoundPlayer {
@@ -102,6 +105,20 @@ void main() {
         GameFeedback.wrongBuzzGap + const Duration(milliseconds: 20));
     expect(haptics,
         ['HapticFeedbackType.mediumImpact', 'HapticFeedbackType.mediumImpact']);
+  });
+
+  test('again() is a much quieter wrong tone with one light tap', () async {
+    final (feedback, player) = await make();
+    feedback.wrong();
+    await Future<void>.delayed(
+        GameFeedback.wrongBuzzGap + const Duration(milliseconds: 20));
+    haptics.clear();
+    feedback.again();
+    await Future<void>.delayed(
+        GameFeedback.wrongBuzzGap + const Duration(milliseconds: 20));
+    expect(player.played, [FeedbackSound.wrong, FeedbackSound.wrong]);
+    expect(player.volumes.last, lessThan(player.volumes.first / 2));
+    expect(haptics, ['HapticFeedbackType.lightImpact'], reason: 'one light tap only');
   });
 
   test('with Sounds off nothing plays, vibration still works', () async {

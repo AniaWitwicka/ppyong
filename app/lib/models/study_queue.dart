@@ -51,9 +51,10 @@ class StudyQueue {
   /// 2. due reviews,
   /// 3. new words,
   /// 4. the rest: learning before mastered, shortest review gap first.
-  /// Inside a group, shorter gap first, then the word seen longest ago, then
-  /// deck order. Studying a word moves it back in its group, so sessions
-  /// rotate instead of showing the same words again.
+  /// Inside a group, words not studied today first, then shorter gap, then
+  /// the word seen longest ago, then deck order. Studying a word moves it
+  /// back in its group, so sessions rotate instead of showing the same words
+  /// again — also on the same day.
   static List<CardModel> orderForStudy(List<CardModel> cards, DateTime today) {
     final day = DateTime(today.year, today.month, today.day);
     int group(CardModel c) {
@@ -70,11 +71,21 @@ class StudyQueue {
       return x.compareTo(y);
     }
 
+    // Studied today (e.g. this morning's batch and its quiz): to the back of
+    // its group. A same-day "knew it" doesn't grow the gap (HRHTA-115), so
+    // without this "shortest gap first" brought the same words straight back.
+    bool studiedToday(CardModel c) {
+      final seen = c.lastReviewed?.toLocal();
+      return seen != null && !DateTime(seen.year, seen.month, seen.day).isBefore(day);
+    }
+
     final indexed = [for (var i = 0; i < cards.length; i++) (i, cards[i], group(cards[i]))];
     indexed.sort((a, b) {
       var r = a.$3.compareTo(b.$3);
       if (r != 0) return r;
       if (a.$3 != 2) {
+        r = (studiedToday(a.$2) ? 1 : 0).compareTo(studiedToday(b.$2) ? 1 : 0);
+        if (r != 0) return r;
         r = a.$2.intervalDays.compareTo(b.$2.intervalDays);
         if (r != 0) return r;
         r = byLastSeen(a.$2, b.$2);

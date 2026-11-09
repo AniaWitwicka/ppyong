@@ -109,6 +109,33 @@ void main() {
     expect(ids(next), ['w5', 'w6', 'w7', 'w8', 'w9']);
   });
 
+  test('words studied today go last even with a shorter gap (batch + quiz, then Continue)',
+      () {
+    // Nothing due or new. Ten words got their first "knew it" in this
+    // morning's quiz (1-day gap); ten others have longer gaps from days ago.
+    final morning = DateTime(2026, 11, 3, 9);
+    final lastWeek = DateTime(2026, 10, 30, 18);
+    final cards = [
+      for (var i = 0; i < 10; i++)
+        seen('quizzed$i', CardStatus.learning,
+            due: DateTime(2026, 11, 4), last: morning, interval: 1),
+      for (var i = 0; i < 10; i++)
+        seen('older$i', CardStatus.learning,
+            due: DateTime(2026, 11, 5), last: lastWeek, interval: 6),
+    ];
+    final next = StudyQueue(cards, sessionSize: 10, today: today).session;
+    expect(ids(next), [for (var i = 0; i < 10; i++) 'older$i']);
+  });
+
+  test('tomorrow, yesterday\'s words are back in normal order', () {
+    final yesterday = DateTime(2026, 11, 2, 9);
+    final cards = [
+      seen('gap6', CardStatus.learning, due: DateTime(2026, 11, 7), last: DateTime(2026, 11, 1), interval: 6),
+      seen('gap1', CardStatus.learning, due: DateTime(2026, 11, 4), last: yesterday, interval: 1),
+    ];
+    expect(ids(StudyQueue.orderForStudy(cards, today)), ['gap1', 'gap6']);
+  });
+
   test('last_reviewed and interval_days come from the API', () {
     final c = CardModel.fromJson({
       'id': 'c1', 'korean': 'k', 'translation': 't', 'status': 'learning',

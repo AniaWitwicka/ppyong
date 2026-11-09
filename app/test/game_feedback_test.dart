@@ -121,6 +121,47 @@ void main() {
     expect(haptics, ['HapticFeedbackType.lightImpact'], reason: 'one light tap only');
   });
 
+  test('flip() is the card swish, with no vibration', () async {
+    final (feedback, player) = await make();
+    feedback.flip();
+    await Future<void>.delayed(Duration.zero);
+    expect(player.played, [FeedbackSound.flip]);
+    expect(haptics, isEmpty);
+  });
+
+  test('volume: the default plays as tuned, louder and quieter scale it, 0 is silent',
+      () async {
+    final (feedback, player) = await make();
+    expect(feedback.volume, GameFeedback.defaultVolume);
+    feedback.correct();
+    feedback.setVolume(1.0);
+    feedback.correct();
+    feedback.sessionComplete();
+    feedback.setVolume(0.35);
+    feedback.correct();
+    feedback.setVolume(0);
+    feedback.correct();
+    await Future<void>.delayed(Duration.zero);
+    final base = GameFeedback.volumes[FeedbackSound.correct]!;
+    expect(player.volumes[0], closeTo(base, 1e-9), reason: 'default = as tuned');
+    expect(player.volumes[1], greaterThan(base));
+    expect(player.volumes[2], 1.0, reason: 'never above full level');
+    expect(player.volumes[3], closeTo(base / 2, 1e-9));
+    expect(player.played, hasLength(4), reason: 'volume 0 plays nothing');
+    expect(haptics, hasLength(5), reason: 'vibration does not depend on volume');
+  });
+
+  test('letting go of the slider saves the volume and plays a sample', () async {
+    final (feedback, player) = await make();
+    feedback.setVolume(0.4);
+    await feedback.commitVolume();
+    expect(player.played, [FeedbackSound.correct]);
+    expect(haptics, isEmpty, reason: 'the sample is sound only');
+    final restarted = GameFeedback(player: FakeSoundPlayer());
+    await restarted.load();
+    expect(restarted.volume, 0.4);
+  });
+
   test('with Sounds off nothing plays, vibration still works', () async {
     final (feedback, player) = await make({GameFeedback.soundKey: false});
     feedback.correct();
@@ -247,11 +288,22 @@ void main() {
       expect(switchOf(tester, 'sound-switch').value, isTrue);
       expect(switchOf(tester, 'vibration-switch').value, isTrue);
 
+      // The volume slider sits under Sounds; dragging it left lowers and saves it.
+      final slider = find.byKey(const ValueKey('volume-slider'));
+      expect(slider, findsOneWidget);
+      await tester.drag(slider, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      expect(feedback.volume, lessThan(GameFeedback.defaultVolume));
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getDouble(GameFeedback.volumeKey), feedback.volume);
+
       await tester.tap(find.byKey(const ValueKey('sound-switch')));
       await tester.tap(find.text('Vibration')); // the whole row toggles
       await tester.pumpAndSettle();
       expect(switchOf(tester, 'sound-switch').value, isFalse);
       expect(switchOf(tester, 'vibration-switch').value, isFalse);
+      expect(find.byKey(const ValueKey('volume-slider')), findsNothing,
+          reason: 'no slider while Sounds is off');
 
       // "Restart": a fresh service reads what was saved.
       final restarted = GameFeedback(player: FakeSoundPlayer());

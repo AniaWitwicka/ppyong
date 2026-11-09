@@ -933,7 +933,7 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
 
   void _flip() {
     if (_isFlipped || _exiting) return;
-    GameFeedback.of(context).tap();
+    GameFeedback.of(context).flip();
     _flipCtrl.forward();
     setState(() => _isFlipped = true);
   }

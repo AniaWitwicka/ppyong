@@ -131,21 +131,21 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('flip → quiet tap; buttons: Knew it → correct, Again → soft',
+    testWidgets('flip → swish; buttons: Knew it → correct, Again → soft',
         (tester) async {
       final feedback = FakeGameFeedback();
       await openStudy(tester, feedback: feedback);
       expect(feedback.calls, isEmpty, reason: 'nothing plays on open');
 
       await flip(tester);
-      expect(feedback.calls, ['tap']);
+      expect(feedback.calls, ['flip']);
       await tester.tap(face('t0'));
       await tester.pumpAndSettle();
-      expect(feedback.calls, ['tap'], reason: 'tapping a turned card is silent');
+      expect(feedback.calls, ['flip'], reason: 'tapping a turned card is silent');
 
       await tester.tap(find.text('Knew it').last);
       await tester.pump();
-      expect(feedback.calls, ['tap', 'correct'], reason: 'plays the moment it is rated');
+      expect(feedback.calls, ['flip', 'correct'], reason: 'plays the moment it is rated');
       await tester.pumpAndSettle();
 
       await flip(tester);
@@ -153,7 +153,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Again'), warnIfMissed: false); // double tap
       await tester.pumpAndSettle();
-      expect(feedback.calls, ['tap', 'correct', 'tap', 'again']);
+      expect(feedback.calls, ['flip', 'correct', 'flip', 'again']);
     });
 
     testWidgets('swipes: right → correct, left → soft again, let go early → nothing',
@@ -173,7 +173,7 @@ void main() {
 
       await flip(tester);
       await swipe(tester, -200);
-      expect(feedback.calls, ['correct', 'tap', 'again']);
+      expect(feedback.calls, ['correct', 'flip', 'again']);
     });
 
     testWidgets('dragging a card that is not turned yet plays nothing', (tester) async {

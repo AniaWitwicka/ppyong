@@ -71,6 +71,7 @@ flutter:
     - assets/sounds/correct.mp3
     - assets/sounds/wrong.mp3
     - assets/sounds/tap.mp3
+    - assets/sounds/flip.mp3
     - assets/sounds/complete.mp3
     - assets/sounds/batch.mp3
 

@@ -17,6 +17,8 @@ class FakeGameFeedback extends GameFeedback {
   @override
   void tap() => calls.add('tap');
   @override
+  void flip() => calls.add('flip');
+  @override
   void sessionComplete() => calls.add('sessionComplete');
   @override
   void batchComplete() => calls.add('batchComplete');

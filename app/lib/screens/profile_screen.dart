@@ -503,6 +503,7 @@ class _FeedbackSwitches extends StatelessWidget {
             ),
             onTap: () => feedback.setSound(!feedback.soundOn),
           ),
+          if (feedback.soundOn) _VolumeSlider(feedback: feedback),
           // iPhone browsers can't vibrate, so the switch would do nothing.
           if (GameFeedback.canVibrate) ...[
             const _SettingsDivider(),
@@ -519,6 +520,47 @@ class _FeedbackSwitches extends StatelessWidget {
               onTap: () => feedback.setVibration(!feedback.vibrationOn),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// How loud the game sounds are. Shown under the Sounds switch while it's on.
+class _VolumeSlider extends StatelessWidget {
+  const _VolumeSlider({required this.feedback});
+
+  final GameFeedback feedback;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 32,
+            child: Icon(Icons.volume_mute_rounded, color: AppColors.fog, size: 18),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: AppColors.periwinkle,
+                inactiveTrackColor: AppColors.border,
+                thumbColor: AppColors.periwinkle,
+                overlayColor: AppColors.periwinkle.withValues(alpha: 0.16),
+                trackHeight: 4,
+              ),
+              child: Slider(
+                key: const ValueKey('volume-slider'),
+                value: feedback.volume,
+                onChanged: feedback.setVolume,
+                onChangeEnd: (_) => feedback.commitVolume(),
+                semanticFormatterCallback: (v) => 'Sound volume ${(v * 100).round()}%',
+              ),
+            ),
+          ),
+          const Icon(Icons.volume_up_rounded, color: AppColors.ash, size: 18),
         ],
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
+import '../services/game_feedback.dart';
 import '../services/user_service.dart';
 import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_input.dart';
@@ -467,10 +468,83 @@ class _SettingsSection extends StatelessWidget {
                     color: AppColors.fog, size: 20),
                 onTap: onWeakWords,
               ),
+              const _SettingsDivider(),
+              const _FeedbackSwitches(),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Sounds / Vibration on-off for the games, remembered on this device.
+class _FeedbackSwitches extends StatelessWidget {
+  const _FeedbackSwitches();
+
+  @override
+  Widget build(BuildContext context) {
+    final feedback = GameFeedback.of(context);
+    return ListenableBuilder(
+      listenable: feedback,
+      builder: (context, _) => Column(
+        children: [
+          _SettingsRow(
+            icon: feedback.soundOn
+                ? Icons.volume_up_rounded
+                : Icons.volume_off_rounded,
+            iconColor: AppColors.orange,
+            iconBg: AppColors.orange.withValues(alpha: 0.12),
+            label: 'Sounds',
+            trailing: _SettingsSwitch(
+              key: const ValueKey('sound-switch'),
+              value: feedback.soundOn,
+              onChanged: feedback.setSound,
+            ),
+            onTap: () => feedback.setSound(!feedback.soundOn),
+          ),
+          // iPhone browsers can't vibrate, so the switch would do nothing.
+          if (GameFeedback.canVibrate) ...[
+            const _SettingsDivider(),
+            _SettingsRow(
+              icon: Icons.vibration_rounded,
+              iconColor: AppColors.forestGreen,
+              iconBg: const Color(0xFFE8F5EE),
+              label: 'Vibration',
+              trailing: _SettingsSwitch(
+                key: const ValueKey('vibration-switch'),
+                value: feedback.vibrationOn,
+                onChanged: feedback.setVibration,
+              ),
+              onTap: () => feedback.setVibration(!feedback.vibrationOn),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsSwitch extends StatelessWidget {
+  const _SettingsSwitch({super.key, required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 20,
+      child: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: Colors.white,
+        activeTrackColor: AppColors.periwinkle,
+        inactiveThumbColor: Colors.white,
+        inactiveTrackColor: AppColors.fog,
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
     );
   }
 }

@@ -67,6 +67,11 @@ flutter:
   assets:
     - assets/fonts/NotoSansKR-Regular.ttf
     - assets/fonts/NotoSansKR-Bold.ttf
+    # Game feedback sounds (HRHTA-105), played by lib/services/game_feedback.dart.
+    - assets/sounds/correct.mp3
+    - assets/sounds/wrong.mp3
+    - assets/sounds/tap.mp3
+    - assets/sounds/complete.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:

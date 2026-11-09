@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../services/game_feedback.dart';
 import '../theme/app_theme.dart';
 
 // ── Quiz question ──────────────────────────────────────────────────────────
@@ -108,6 +109,10 @@ class _QuizQuestionViewState extends State<QuizQuestionView>
     if (_selectedIndex != null) return;
     final isCorrect = index == widget.correctIndex;
     setState(() => _selectedIndex = index);
+    // Sound + vibration together with the green/pink colour, before the
+    // answer is saved. Once per question: later taps return above.
+    final feedback = GameFeedback.of(context);
+    isCorrect ? feedback.correct() : feedback.wrong();
     widget.onAnswer(isCorrect);
     if (isCorrect) {
       _popCtrl.forward();

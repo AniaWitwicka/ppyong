@@ -4,6 +4,8 @@ import 'package:ppyong/models/card.dart';
 import 'package:ppyong/screens/flashcard_study_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_game_feedback.dart';
+
 CardModel card(int i) => CardModel(
       id: 'c$i',
       korean: 'k$i',
@@ -16,20 +18,22 @@ CardModel card(int i) => CardModel(
 /// Saved reviews as (card id, knew it).
 final reviewed = <(String, bool)>[];
 
-Future<void> open(WidgetTester tester, int deckSize, {Map<String, Object> prefs = const {}}) async {
+Future<void> open(WidgetTester tester, int deckSize,
+    {Map<String, Object> prefs = const {}, FakeGameFeedback? feedback}) async {
   reviewed.clear();
   SharedPreferences.setMockInitialValues({'study_session_size': 10, ...prefs});
   await tester.binding.setSurfaceSize(const Size(400, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final cards = [for (var i = 0; i < deckSize; i++) card(i)];
-  await tester.pumpWidget(MaterialApp(
+  final app = MaterialApp(
     home: FlashcardStudyScreen(
       deckId: 'd1',
       deckName: 'Test deck',
       loadCards: (_, scope) async => scope == '' ? cards : <CardModel>[],
       reviewCard: (id, knew) async => reviewed.add((id, knew)),
     ),
-  ));
+  );
+  await tester.pumpWidget(feedback?.provide(app) ?? app);
   await tester.pumpAndSettle();
   await tester.tap(find.text('Start studying'));
   await tester.pumpAndSettle();
@@ -131,6 +135,36 @@ void main() {
     expect(reviewed, hasLength(3), reason: 'one save per word, retries not saved');
     expect(reviewed.where((r) => r.$1 == missedId).single.$2, isFalse);
     expect(reviewed.where((r) => r.$1 != missedId).every((r) => r.$2), isTrue);
+  });
+
+  testWidgets('quick test answers give feedback once each', (tester) async {
+    final feedback = FakeGameFeedback();
+    await open(tester, 2, feedback: feedback);
+    for (var i = 0; i < 2; i++) {
+      await swipe(tester, knew: true);
+    }
+    expect(find.text('Quick test · 1 of 2'), findsOneWidget);
+    final before = feedback.calls.length; // swipes are HRHTA-107, not counted here
+
+    final i = currentKorean(tester).substring(1);
+    await tester.tap(find.text('t$i'));
+    await tester.pump();
+    expect(feedback.calls.sublist(before), ['correct']);
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+
+    final j = currentKorean(tester).substring(1);
+    final wrong = find.byWidgetPredicate((w) =>
+        w is Text && RegExp(r'^t\d+$').hasMatch(w.data ?? '') && w.data != 't$j');
+    await tester.tap(wrong.first);
+    await tester.pump();
+    await tester.tap(find.text('t$j'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(feedback.calls.sublist(before), ['correct', 'wrong']);
+    await tester.tap(find.text('Next →'));
+    await tester.pumpAndSettle();
+    expect(feedback.calls.sublist(before), ['correct', 'wrong']);
   });
 
   testWidgets('a right test answer moves on by itself; a wrong one waits for Next',

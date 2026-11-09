@@ -5,17 +5,19 @@ import 'package:ppyong/models/deck_selection.dart';
 import 'package:ppyong/screens/multiple_choice_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_game_feedback.dart';
+
 CardModel card(String id) => CardModel(
     id: id, korean: 'k-$id', romanisation: '', translation: 't-$id', notes: '',
     status: CardStatus.newCard);
 
 final _cards = [for (var i = 1; i <= 12; i++) card('w$i')];
 
-Future<List<String>> openQuiz(WidgetTester tester) async {
+Future<List<String>> openQuiz(WidgetTester tester, {FakeGameFeedback? feedback}) async {
   await tester.binding.setSurfaceSize(const Size(400, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final reviewed = <String>[];
-  await tester.pumpWidget(MaterialApp(
+  final app = MaterialApp(
     home: Builder(
       builder: (context) => Scaffold(
         body: Center(
@@ -35,7 +37,8 @@ Future<List<String>> openQuiz(WidgetTester tester) async {
         ),
       ),
     ),
-  ));
+  );
+  await tester.pumpWidget(feedback?.provide(app) ?? app);
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
   return reviewed;
@@ -55,6 +58,42 @@ Future<void> answerRight(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('answers give feedback once: right → correct, wrong → wrong, Next is silent',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'study_session_size': 10});
+    final feedback = FakeGameFeedback();
+    await openQuiz(tester, feedback: feedback);
+    await tester.tap(find.text('Start'));
+    await tester.pumpAndSettle();
+    expect(feedback.calls, isEmpty, reason: 'nothing plays on screen open');
+
+    // Right answer: one "correct" the moment it's tapped, before moving on.
+    await tester.tap(find.text('t-${currentWord(tester)}'));
+    await tester.pump();
+    expect(feedback.calls, ['correct']);
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+    expect(find.text('Question 2 of 10'), findsOneWidget);
+
+    // Wrong answer: one "wrong"; tapping more options does nothing.
+    final word = currentWord(tester);
+    final wrongOptions = find.byWidgetPredicate((w) =>
+        w is Text && (w.data ?? '').startsWith('t-') && w.data != 't-$word');
+    await tester.tap(wrongOptions.first);
+    await tester.pump();
+    expect(feedback.calls, ['correct', 'wrong']);
+    await tester.tap(wrongOptions.last);
+    await tester.tap(find.text('t-$word'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(feedback.calls, ['correct', 'wrong']);
+
+    await tester.tap(find.text('Next →'));
+    await tester.pumpAndSettle();
+    expect(find.text('Question 3 of 10'), findsOneWidget);
+    expect(feedback.calls, ['correct', 'wrong'], reason: 'Next is navigation, not an answer');
+  });
+
   testWidgets('quiz runs in batches of the saved size, no word twice', (tester) async {
     SharedPreferences.setMockInitialValues({'study_session_size': 10});
     final reviewed = await openQuiz(tester);

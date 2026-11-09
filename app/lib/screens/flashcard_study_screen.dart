@@ -874,28 +874,33 @@ class _StudyCard extends StatefulWidget {
 }
 
 class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
+  /// How long a new card takes to settle in, and an answered one to leave.
+  static const entranceDuration = Duration(milliseconds: 280);
+  static const exitDuration = Duration(milliseconds: 260);
+
   late final AnimationController _entranceCtrl;
   late final Animation<double> _entranceAnim;
   late final AnimationController _flipCtrl;
   late final Animation<double> _flipAnim;
   late final AnimationController _exitCtrl;
+  late final Animation<double> _exitAnim;
+
+  /// Finger drag. A notifier, not setState, so a drag repaints only the card.
+  final _drag = ValueNotifier<double>(0);
 
   bool _isFlipped = false;
-  double _dragOffset = 0;
   bool _exiting = false;
   bool _exitKnewIt = false;
+  double _exitFrom = 0;
 
   @override
   void initState() {
     super.initState();
 
-    _entranceCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
-    _entranceAnim = Tween<double>(begin: 220.0, end: 0.0).animate(
-      CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut),
-    );
+    // The new card fades in, grows from 94% and rises a little. Nothing moves
+    // it sideways, so it never pops in half off screen.
+    _entranceCtrl = AnimationController(vsync: this, duration: entranceDuration);
+    _entranceAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic);
     _entranceCtrl.forward();
 
     _flipCtrl = AnimationController(
@@ -906,15 +911,8 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
       CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOut),
     );
 
-    _exitCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
-    _exitCtrl.addListener(() {
-      setState(() {
-        _dragOffset = (_exitKnewIt ? 1 : -1) * _exitCtrl.value * 420;
-      });
-    });
+    _exitCtrl = AnimationController(vsync: this, duration: exitDuration);
+    _exitAnim = CurvedAnimation(parent: _exitCtrl, curve: Curves.easeIn);
     _exitCtrl.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         widget.onAnswer(_exitKnewIt);
@@ -927,6 +925,7 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
     _entranceCtrl.dispose();
     _flipCtrl.dispose();
     _exitCtrl.dispose();
+    _drag.dispose();
     super.dispose();
   }
 
@@ -941,30 +940,29 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
     setState(() {
       _exiting = true;
       _exitKnewIt = knewIt;
+      _exitFrom = _drag.value;
     });
     _exitCtrl.forward();
   }
 
   void _onDragUpdate(DragUpdateDetails d) {
     if (!_isFlipped || _exiting) return;
-    setState(() => _dragOffset += d.delta.dx);
+    _drag.value += d.delta.dx;
   }
 
   void _onDragEnd(DragEndDetails d) {
     if (!_isFlipped || _exiting) return;
-    if (_dragOffset > 80) {
+    if (_drag.value > 80) {
       _commitSwipe(true);
-    } else if (_dragOffset < -80) {
+    } else if (_drag.value < -80) {
       _commitSwipe(false);
     } else {
-      setState(() => _dragOffset = 0);
+      _drag.value = 0;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final overlayOpacity = (_dragOffset.abs() / 100).clamp(0.0, 1.0);
-    final isKnewIt = _dragOffset > 0;
     final hintOpacity = _isFlipped ? 0.9 : 0.25;
 
     return GestureDetector(
@@ -1020,70 +1018,111 @@ class _StudyCardState extends State<_StudyCard> with TickerProviderStateMixin {
               ),
             ),
             Expanded(
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_flipAnim, _entranceAnim]),
-                builder: (context, _) {
-                  final angle = _flipAnim.value;
-                  final showFront = angle < math.pi / 2;
-                  return Transform.translate(
-                    offset: Offset(_entranceAnim.value + _dragOffset, 0),
-                    child: Transform(
-                      transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.001)
-                        ..rotateY(angle),
-                      alignment: Alignment.center,
-                      child: Stack(
-                        children: [
-                          _CardFace(
-                            card: widget.card,
-                            direction: widget.direction,
-                            isFront: showFront,
-                            isFlipped: _isFlipped,
-                          ),
-                          if (_dragOffset != 0)
-                            Positioned.fill(
-                              child: ClipRRect(
-                                borderRadius: AppRadius.cardBorderRadius,
-                                child: Opacity(
-                                  opacity: overlayOpacity,
-                                  child: Container(
-                                    color: isKnewIt
-                                        ? const Color(0xFFE8F5EE)
-                                        : const Color(0xFFFEF0F6),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      isKnewIt ? 'Knew it!' : 'Keep trying',
-                                      style: TextStyle(
-                                        color: isKnewIt
-                                            ? AppColors.forestGreen
-                                            : AppColors.bubblegum,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+              // Own layer: dragging and animating repaint only the card.
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_flipAnim, _entranceAnim, _exitAnim, _drag]),
+                  builder: (context, _) => _buildMovingCard(),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            if (!_isFlipped)
-              Text(
-                'Tap to reveal',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.periwinkle,
-                      fontWeight: FontWeight.w600,
-                    ),
-              )
-            else
-              _AnswerButtons(onAnswer: _commitSwipe),
+            // Fixed height: the card keeps its size when the buttons appear.
+            SizedBox(
+              height: _answerAreaHeight,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: !_isFlipped
+                    ? Center(
+                        key: const ValueKey('reveal'),
+                        child: Text(
+                          'Tap to reveal',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AppColors.periwinkle,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      )
+                    : _AnswerButtons(key: const ValueKey('answer'), onAnswer: _commitSwipe),
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  static const _answerAreaHeight = 52.0;
+
+  Widget _buildMovingCard() {
+    final enter = _entranceAnim.value;
+    final exit = _exitAnim.value;
+    final angle = _flipAnim.value;
+    final showFront = angle < math.pi / 2;
+
+    final double dx;
+    if (_exiting) {
+      final target = _exitKnewIt ? 440.0 : -440.0;
+      dx = _exitFrom + (target - _exitFrom) * exit;
+    } else {
+      dx = _drag.value;
+    }
+    final overlayOpacity = (dx.abs() / 100).clamp(0.0, 1.0);
+    final isKnewIt = dx > 0;
+    final opacity = (enter * (1 - exit)).clamp(0.0, 1.0);
+
+    return Opacity(
+      opacity: opacity,
+      child: Transform.translate(
+        offset: Offset(dx, (1 - enter) * 16),
+        child: Transform.rotate(
+          angle: dx / 3000,
+          child: Transform.scale(
+            scale: 0.94 + 0.06 * enter,
+            // The swipe tint sits outside the flip, so its text never reads
+            // mirrored on a turned card.
+            child: Stack(
+              children: [
+                Transform(
+                  transform: Matrix4.identity()
+                    ..setEntry(3, 2, 0.001)
+                    ..rotateY(angle),
+                  alignment: Alignment.center,
+                  child: _CardFace(
+                    card: widget.card,
+                    direction: widget.direction,
+                    isFront: showFront,
+                    isFlipped: _isFlipped,
+                  ),
+                ),
+                if (dx != 0)
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: AppRadius.cardBorderRadius,
+                      child: Opacity(
+                        opacity: overlayOpacity,
+                        child: Container(
+                          color: isKnewIt
+                              ? const Color(0xFFE8F5EE)
+                              : const Color(0xFFFEF0F6),
+                          alignment: Alignment.center,
+                          child: Text(
+                            isKnewIt ? 'Knew it!' : 'Keep trying',
+                            style: TextStyle(
+                              color: isKnewIt
+                                  ? AppColors.forestGreen
+                                  : AppColors.bubblegum,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1114,9 +1153,11 @@ class _CardFace extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: AppRadius.cardBorderRadius,
-        border: isFlipped
-            ? Border.all(color: AppColors.periwinkle, width: 2)
-            : Border.all(color: AppColors.border, width: 1),
+        // Same width both ways, so the content doesn't shift on the flip.
+        border: Border.all(
+          color: isFlipped ? AppColors.periwinkle : AppColors.border,
+          width: 2,
+        ),
         boxShadow: [
           BoxShadow(
             color: AppColors.ink.withOpacity(0.07),
@@ -1264,7 +1305,7 @@ class _BackContent extends StatelessWidget {
 }
 
 class _AnswerButtons extends StatelessWidget {
-  const _AnswerButtons({required this.onAnswer});
+  const _AnswerButtons({super.key, required this.onAnswer});
   final ValueChanged<bool> onAnswer;
 
   @override
